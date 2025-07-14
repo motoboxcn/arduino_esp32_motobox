@@ -228,7 +228,7 @@ bool SDManager::saveDeviceInfo() {
         return false;
     }
 
-    const char* filename = "/config/device_info.json";
+    const char* filename = "/device_info.json";
     
 #ifdef SD_MODE_SPI
     File file = SD.open(filename, FILE_WRITE);
@@ -243,7 +243,7 @@ bool SDManager::saveDeviceInfo() {
 
     // 创建设备信息JSON
     String deviceInfo = "{\n";
-    deviceInfo += "  \"device_id\": \"" + getDeviceID() + "\",\n";
+    deviceInfo += "  \"device_id\": \"" + device.get_device_id() + "\",\n";
     deviceInfo += "  \"firmware_version\": \"" + String(FIRMWARE_VERSION) + "\",\n";
     deviceInfo += "  \"created_at\": \"" + getCurrentTimestamp() + "\",\n";
     deviceInfo += "  \"sd_total_mb\": " + String((unsigned long)getTotalSpaceMB()) + ",\n";
@@ -330,7 +330,7 @@ bool SDManager::recordGPSData(gnss_data_t &gnss_data) {
         file.println("{");
         file.println("  \"type\": \"FeatureCollection\",");
         file.println("  \"metadata\": {");
-        file.println("    \"device_id\": \"" + getDeviceID() + "\",");
+        file.println("    \"device_id\": \"" + device.get_device_id() + "\",");
         file.println("    \"session_start\": \"" + getCurrentTimestamp() + "\",");
         file.println("    \"boot_count\": " + String(getBootCount()) + ",");
         file.println("    \"firmware_version\": \"" + String(FIRMWARE_VERSION) + "\"");
@@ -369,21 +369,6 @@ bool SDManager::recordGPSData(gnss_data_t &gnss_data) {
 
     debugPrint("📍 GPS数据已记录: " + String(gnss_data.latitude, 6) + "," + String(gnss_data.longitude, 6) + " (卫星:" + String(gnss_data.satellites) + ")");
     return true;
-}
-
-String SDManager::getDeviceID() {
-    // 使用ESP32的MAC地址作为设备ID
-    uint8_t mac[6];
-    esp_read_mac(mac, ESP_MAC_WIFI_STA);
-    
-    String deviceId = "";
-    for (int i = 0; i < 6; i++) {
-        if (mac[i] < 16) deviceId += "0";
-        deviceId += String(mac[i], HEX);
-        if (i < 5) deviceId += ":";
-    }
-    deviceId.toUpperCase();
-    return deviceId;
 }
 
 String SDManager::getCurrentTimestamp() {
@@ -564,7 +549,7 @@ bool SDManager::handleSerialCommand(const String& command) {
         }
         
         Serial.println("=== SD卡信息 ===");
-        Serial.println("设备ID: " + getDeviceID());
+        Serial.println("设备ID: " + device.get_device_id());
         
         uint64_t totalMB = getTotalSpaceMB();
         uint64_t freeMB = getFreeSpaceMB();
@@ -614,7 +599,7 @@ bool SDManager::handleSerialCommand(const String& command) {
         Serial.println("当前会话文件: " + generateGPSSessionFilename());
         Serial.println("启动次数: " + String(getBootCount()));
         Serial.println("运行时间: " + String(millis() / 1000) + " 秒");
-        Serial.println("设备ID: " + getDeviceID());
+        Serial.println("设备ID: " + device.get_device_id());
         return true;
     }
     else if (command == "sd.finish") {
@@ -690,14 +675,561 @@ bool SDManager::handleSerialCommand(const String& command) {
         
         return true;
     }
+    else if (command == "sd.ls" || command.startsWith("sd.ls ")) {
+        if (!_initialized) {
+            Serial.println("❌ SD卡未初始化");
+            return false;
+        }
+        
+        String path = "/";
+        if (command.length() > 5) {
+            path = command.substring(6);
+            path.trim();
+            if (!path.startsWith("/")) {
+                path = "/" + path;
+            }
+        }
+        
+        Serial.println("=== 目录列表: " + path + " ===");
+        return listDirectory(path);
+    }
+    else if (command == "sd.tree") {
+        if (!_initialized) {
+            Serial.println("❌ SD卡未初始化");
+            return false;
+        }
+        
+        Serial.println("=== SD卡目录树 ===");
+        return listDirectoryTree("/", 0, 3); // 最大深度3层
+    }
+    else if (command.startsWith("sd.mkdir ")) {
+        if (!_initialized) {
+            Serial.println("❌ SD卡未初始化");
+            return false;
+        }
+        
+        String path = command.substring(9);
+        path.trim();
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        
+        Serial.println("正在创建目录: " + path);
+        bool result = createDirectory(path);
+        
+        if (result) {
+            Serial.println("✅ 目录创建成功: " + path);
+        } else {
+            Serial.println("❌ 目录创建失败: " + path);
+        }
+        
+        return result;
+    }
+    else if (command.startsWith("sd.rm ")) {
+        if (!_initialized) {
+            Serial.println("❌ SD卡未初始化");
+            return false;
+        }
+        
+        String path = command.substring(6);
+        path.trim();
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        
+        Serial.println("⚠️ 正在删除: " + path);
+        Serial.println("注意: 此操作不可恢复！");
+        
+        bool result = deleteFile(path);
+        
+        if (result) {
+            Serial.println("✅ 删除成功: " + path);
+        } else {
+            Serial.println("❌ 删除失败: " + path);
+        }
+        
+        return result;
+    }
+    else if (command.startsWith("sd.cat ")) {
+        if (!_initialized) {
+            Serial.println("❌ SD卡未初始化");
+            return false;
+        }
+        
+        String path = command.substring(7);
+        path.trim();
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
+        
+        Serial.println("=== 文件内容: " + path + " ===");
+        return displayFileContent(path);
+    }
+    else if (command == "sd.fmt") {
+        Serial.println("⚠️ 格式化SD卡功能");
+        Serial.println("警告: 此操作将删除SD卡上的所有数据！");
+        Serial.println("ESP32-S3不支持直接格式化SD卡");
+        Serial.println("建议操作:");
+        Serial.println("  1. 将SD卡取出");
+        Serial.println("  2. 使用电脑格式化为FAT32格式");
+        Serial.println("  3. 重新插入SD卡");
+        Serial.println("  4. 重启设备");
+        return false;
+    }
+    else if (command == "sd.help") {
+        Serial.println("=== SD卡命令帮助 ===");
+        Serial.println("基本命令:");
+        Serial.println("  sd.info      - 显示SD卡详细信息");
+        Serial.println("  sd.status    - 检查SD卡状态");
+        Serial.println("  sd.help      - 显示此帮助信息");
+        Serial.println("");
+        Serial.println("文件操作:");
+        Serial.println("  sd.ls [path] - 列出目录内容 (默认根目录)");
+        Serial.println("  sd.tree      - 显示目录树结构");
+        Serial.println("  sd.cat <file>- 显示文件内容");
+        Serial.println("  sd.mkdir <dir> - 创建目录");
+        Serial.println("  sd.rm <path> - 删除文件或目录");
+        Serial.println("");
+        Serial.println("GPS相关:");
+        Serial.println("  sd.test      - 测试GPS数据记录");
+        Serial.println("  sd.session   - 显示当前GPS会话信息");
+        Serial.println("  sd.finish    - 结束当前GPS会话");
+        Serial.println("  sd.dirs      - 检查和创建目录结构");
+        Serial.println("");
+        Serial.println("系统操作:");
+        Serial.println("  sd.fmt       - 格式化说明 (需要电脑操作)");
+        Serial.println("");
+        Serial.println("示例:");
+        Serial.println("  sd.ls /data");
+        Serial.println("  sd.mkdir /logs/test");
+        Serial.println("  sd.cat /config/device.json");
+        Serial.println("  sd.rm /temp/old_file.txt");
+        return true;
+    }
     
     Serial.println("❌ 未知SD卡命令: " + command);
-    Serial.println("可用的SD卡命令:");
-    Serial.println("  sd.info    - 显示SD卡详细信息");
-    Serial.println("  sd.test    - 测试GPS数据记录");
-    Serial.println("  sd.status  - 检查SD卡状态");
-    Serial.println("  sd.session - 显示当前GPS会话信息");
-    Serial.println("  sd.finish  - 结束当前GPS会话");
-    Serial.println("  sd.dirs    - 检查和创建目录结构");
+    Serial.println("输入 'sd.help' 查看所有可用命令");
     return false;
+}
+
+// ========== 文件操作方法实现 ==========
+
+bool SDManager::writeFile(const String& path, const String& content) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法写入文件: " + path);
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File file = SD.open(path, FILE_WRITE);
+#else
+    File file = SD_MMC.open(path, FILE_WRITE);
+#endif
+
+    if (!file) {
+        debugPrint("❌ 无法创建文件: " + path);
+        return false;
+    }
+
+    size_t bytesWritten = file.print(content);
+    file.close();
+
+    if (bytesWritten != content.length()) {
+        debugPrint("⚠️ 文件写入不完整: " + path);
+        return false;
+    }
+
+    return true;
+}
+
+bool SDManager::appendFile(const String& path, const String& content) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法追加文件: " + path);
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File file = SD.open(path, FILE_APPEND);
+#else
+    File file = SD_MMC.open(path, FILE_APPEND);
+#endif
+
+    if (!file) {
+        debugPrint("❌ 无法打开文件进行追加: " + path);
+        return false;
+    }
+
+    size_t bytesWritten = file.print(content);
+    file.close();
+
+    if (bytesWritten != content.length()) {
+        debugPrint("⚠️ 文件追加不完整: " + path);
+        return false;
+    }
+
+    return true;
+}
+
+String SDManager::readFile(const String& path) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法读取文件: " + path);
+        return "";
+    }
+
+#ifdef SD_MODE_SPI
+    File file = SD.open(path, FILE_READ);
+#else
+    File file = SD_MMC.open(path, FILE_READ);
+#endif
+
+    if (!file) {
+        debugPrint("❌ 无法打开文件: " + path);
+        return "";
+    }
+
+    String content = "";
+    while (file.available()) {
+        content += (char)file.read();
+    }
+    file.close();
+
+    return content;
+}
+
+bool SDManager::deleteFile(const String& path) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法删除文件: " + path);
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    return SD.remove(path);
+#else
+    return SD_MMC.remove(path);
+#endif
+}
+
+bool SDManager::fileExists(const String& path) {
+    if (!_initialized) {
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    return SD.exists(path);
+#else
+    return SD_MMC.exists(path);
+#endif
+}
+
+bool SDManager::createDir(const String& path) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法创建目录: " + path);
+        return false;
+    }
+
+    // 如果目录已存在，返回true
+    if (fileExists(path)) {
+        return true;
+    }
+
+#ifdef SD_MODE_SPI
+    return SD.mkdir(path);
+#else
+    return SD_MMC.mkdir(path);
+#endif
+}
+
+void SDManager::listDir(const String& path) {
+    if (!_initialized) {
+        debugPrint("⚠️ SD卡未初始化，无法列出目录: " + path);
+        return;
+    }
+
+#ifdef SD_MODE_SPI
+    File root = SD.open(path);
+#else
+    File root = SD_MMC.open(path);
+#endif
+
+    if (!root) {
+        debugPrint("❌ 无法打开目录: " + path);
+        return;
+    }
+
+    if (!root.isDirectory()) {
+        debugPrint("❌ 路径不是目录: " + path);
+        root.close();
+        return;
+    }
+
+    Serial.println("目录内容: " + path);
+    File file = root.openNextFile();
+    int fileCount = 0;
+
+    while (file) {
+        String fileName = file.name();
+        size_t fileSize = file.size();
+        String fileType = file.isDirectory() ? "[DIR]" : "[FILE]";
+        
+        Serial.printf("  %s %s (%d bytes)\n", fileType.c_str(), fileName.c_str(), fileSize);
+        
+        fileCount++;
+        file.close();
+        file = root.openNextFile();
+    }
+
+    root.close();
+    Serial.printf("共找到 %d 个项目\n", fileCount);
+}
+
+// ========== 新增的文件系统操作方法实现 ==========
+
+bool SDManager::listDirectory(const String& path) {
+    if (!_initialized) {
+        Serial.println("❌ SD卡未初始化");
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File root = SD.open(path);
+#else
+    File root = SD_MMC.open(path);
+#endif
+
+    if (!root) {
+        Serial.println("❌ 无法打开目录: " + path);
+        return false;
+    }
+
+    if (!root.isDirectory()) {
+        Serial.println("❌ 路径不是目录: " + path);
+        root.close();
+        return false;
+    }
+
+    File file = root.openNextFile();
+    int fileCount = 0;
+    int dirCount = 0;
+    size_t totalSize = 0;
+
+    while (file) {
+        String fileName = file.name();
+        size_t fileSize = file.size();
+        
+        if (file.isDirectory()) {
+            Serial.printf("  [DIR]  %s/\n", fileName.c_str());
+            dirCount++;
+        } else {
+            Serial.printf("  [FILE] %s (%s)\n", fileName.c_str(), formatFileSize(fileSize).c_str());
+            fileCount++;
+            totalSize += fileSize;
+        }
+        
+        file.close();
+        file = root.openNextFile();
+    }
+
+    root.close();
+    
+    Serial.println("--- 统计信息 ---");
+    Serial.printf("目录: %d 个, 文件: %d 个\n", dirCount, fileCount);
+    if (fileCount > 0) {
+        Serial.printf("总大小: %s\n", formatFileSize(totalSize).c_str());
+    }
+    
+    return true;
+}
+
+bool SDManager::listDirectoryTree(const String& path, int depth, int maxDepth) {
+    if (!_initialized || depth > maxDepth) {
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File root = SD.open(path);
+#else
+    File root = SD_MMC.open(path);
+#endif
+
+    if (!root || !root.isDirectory()) {
+        if (root) root.close();
+        return false;
+    }
+
+    // 打印当前目录
+    String indent = "";
+    for (int i = 0; i < depth; i++) {
+        indent += "  ";
+    }
+    
+    if (depth == 0) {
+        Serial.println("📁 " + path);
+    }
+
+    File file = root.openNextFile();
+    while (file) {
+        String fileName = file.name();
+        String fullPath = path;
+        if (!fullPath.endsWith("/")) fullPath += "/";
+        fullPath += fileName;
+        
+        if (file.isDirectory()) {
+            Serial.println(indent + "├── 📁 " + fileName + "/");
+            // 递归列出子目录
+            listDirectoryTree(fullPath, depth + 1, maxDepth);
+        } else {
+            size_t fileSize = file.size();
+            Serial.println(indent + "├── 📄 " + fileName + " (" + formatFileSize(fileSize) + ")");
+        }
+        
+        file.close();
+        file = root.openNextFile();
+    }
+
+    root.close();
+    return true;
+}
+
+bool SDManager::createDirectory(const String& path) {
+    if (!_initialized) {
+        return false;
+    }
+
+    // 检查目录是否已存在
+    if (directoryExists(path.c_str())) {
+        Serial.println("⚠️ 目录已存在: " + path);
+        return true;
+    }
+
+    // 创建父目录（如果需要）
+    int lastSlash = path.lastIndexOf('/');
+    if (lastSlash > 0) {
+        String parentPath = path.substring(0, lastSlash);
+        if (!directoryExists(parentPath.c_str())) {
+            if (!createDirectory(parentPath)) {
+                return false;
+            }
+        }
+    }
+
+#ifdef SD_MODE_SPI
+    bool result = SD.mkdir(path);
+#else
+    bool result = SD_MMC.mkdir(path);
+#endif
+
+    return result;
+}
+
+bool SDManager::displayFileContent(const String& path) {
+    if (!_initialized) {
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File file = SD.open(path);
+#else
+    File file = SD_MMC.open(path);
+#endif
+
+    if (!file) {
+        Serial.println("❌ 无法打开文件: " + path);
+        return false;
+    }
+
+    if (file.isDirectory()) {
+        Serial.println("❌ 路径是目录，不是文件: " + path);
+        file.close();
+        return false;
+    }
+
+    size_t fileSize = file.size();
+    Serial.println("文件大小: " + formatFileSize(fileSize));
+    
+    if (fileSize > 10240) { // 10KB限制
+        Serial.println("⚠️ 文件过大 (>10KB)，只显示前1024字节");
+        char buffer[1025];
+        size_t bytesRead = file.readBytes(buffer, 1024);
+        buffer[bytesRead] = '\0';
+        Serial.println("--- 文件内容开始 ---");
+        Serial.print(buffer);
+        Serial.println("\n--- 文件内容结束 (截断) ---");
+    } else {
+        Serial.println("--- 文件内容开始 ---");
+        while (file.available()) {
+            Serial.write(file.read());
+        }
+        Serial.println("\n--- 文件内容结束 ---");
+    }
+
+    file.close();
+    return true;
+}
+
+bool SDManager::removeFile(const String& path) {
+    if (!_initialized) {
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    return SD.remove(path);
+#else
+    return SD_MMC.remove(path);
+#endif
+}
+
+bool SDManager::removeDirectory(const String& path) {
+    if (!_initialized) {
+        return false;
+    }
+
+#ifdef SD_MODE_SPI
+    File root = SD.open(path);
+#else
+    File root = SD_MMC.open(path);
+#endif
+
+    if (!root || !root.isDirectory()) {
+        if (root) root.close();
+        return false;
+    }
+
+    // 先删除目录中的所有文件和子目录
+    File file = root.openNextFile();
+    while (file) {
+        String fileName = file.name();
+        String fullPath = path;
+        if (!fullPath.endsWith("/")) fullPath += "/";
+        fullPath += fileName;
+        
+        if (file.isDirectory()) {
+            file.close();
+            removeDirectory(fullPath); // 递归删除子目录
+        } else {
+            file.close();
+            removeFile(fullPath); // 删除文件
+        }
+        
+        file = root.openNextFile();
+    }
+
+    root.close();
+
+    // 删除空目录
+#ifdef SD_MODE_SPI
+    return SD.rmdir(path);
+#else
+    return SD_MMC.rmdir(path);
+#endif
+}
+
+// 辅助方法：格式化文件大小显示
+String SDManager::formatFileSize(size_t bytes) {
+    if (bytes < 1024) {
+        return String(bytes) + " B";
+    } else if (bytes < 1024 * 1024) {
+        return String(bytes / 1024.0, 1) + " KB";
+    } else {
+        return String(bytes / (1024.0 * 1024.0), 1) + " MB";
+    }
 }

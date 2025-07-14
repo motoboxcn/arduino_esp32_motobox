@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include "device.h"
 
 #ifdef SD_MODE_SPI
 #include <SD.h>
@@ -38,6 +39,23 @@ public:
     bool recordGPSData(gnss_data_t &gnss_data);
     bool finishGPSSession();
 
+    // 文件操作方法
+    bool writeFile(const String& path, const String& content);
+    bool appendFile(const String& path, const String& content);
+    String readFile(const String& path);
+    bool deleteFile(const String& path);
+    bool fileExists(const String& path);
+    bool createDir(const String& path);
+    void listDir(const String& path);
+    
+    // 新增的文件系统操作方法
+    bool listDirectory(const String& path);
+    bool listDirectoryTree(const String& path, int depth, int maxDepth);
+    bool createDirectory(const String& path);
+    bool displayFileContent(const String& path);
+    bool removeFile(const String& path);
+    bool removeDirectory(const String& path);
+
     // 串口命令处理
     bool handleSerialCommand(const String& command);
 
@@ -68,13 +86,13 @@ private:
     bool directoryExists(const char* path);
     
     // 工具方法
-    String getDeviceID();
     String getCurrentTimestamp();
     String getCurrentDateString();
     String getCurrentTimeString();
     String generateGPSSessionFilename();
     int getBootCount();
     void debugPrint(const String& message);
+    String formatFileSize(size_t bytes);
 };
 
 #endif // SDMANAGER_H

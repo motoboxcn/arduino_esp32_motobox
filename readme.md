@@ -3,7 +3,25 @@
 ## 项目概述
 本项目是基于ESP32-S3的摩托车数据采集与显示系统，专注于嵌入式系统开发和低功耗设计。
 
+
+## 发布固件
+```bash
+bash
+# 检查版本状态
+python3 tools/firmware_release.py --status
+
+# 发布当前版本
+python3 tools/firmware_release.py --release
+
+# 发布指定版本
+python3 tools/firmware_release.py --release --version v4.2.0
+
+# 查看所有版本
+python3 tools/firmware_release.py --list
+```
+
 ## 开发日志
+- 2025-07-14 v4.1.0 支持sd卡升级，支持sd卡升级；
 - 2025-07-12 v4.0.0 完全使用air780eg模块，支持蓝牙配置，支持mqtt配置，支持sd卡存储，支持低功耗模式，支持休眠时间设置与获取；
 - 2025-06-15 v2.3.0 支持 ml307 模块，支持 MQTT 配置；
 - 2025-06-07 v2.2.2 优化振动监测阈值，设置PWM灯光亮度，增强电源管理功能，支持休眠时间设置与获取；

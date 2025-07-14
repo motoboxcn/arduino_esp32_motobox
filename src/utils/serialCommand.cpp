@@ -1,5 +1,14 @@
 #include "utils/serialCommand.h"
 
+#ifdef ENABLE_GPS_LOGGER
+#include "SD/GPSLogger.h"
+extern GPSLogger gpsLogger;
+#endif
+
+#ifdef ENABLE_SDCARD
+extern SDManager sdManager;
+#endif
+
 // ===================== 串口命令处理函数 =====================
 /**
  * 处理串口输入命令
@@ -248,6 +257,28 @@ void handleSerialCommand()
             Serial.println("音频功能未启用");
 #endif
         }
+        else if (command.startsWith("sd."))
+        {
+#ifdef ENABLE_SDCARD
+            // 处理SD卡命令
+            if (!sdManager.handleSerialCommand(command)) {
+                Serial.println("❌ SD卡命令处理失败: " + command);
+            }
+#else
+            Serial.println("SD卡功能未启用");
+#endif
+        }
+        else if (command.startsWith("gps") || command.startsWith("gs") || command.startsWith("gt") || command.startsWith("ge") || command.startsWith("gl") || command.startsWith("gi") || command.startsWith("gh"))
+        {
+#ifdef ENABLE_GPS_LOGGER
+            // 处理GPS记录器命令
+            if (!gpsLogger.handleSerialCommand(command)) {
+                Serial.println("❌ GPS命令处理失败: " + command);
+            }
+#else
+            Serial.println("GPS记录器功能未启用");
+#endif
+        }
         else if (command == "restart" || command == "reboot")
         {
             Serial.println("正在重启设备...");
@@ -266,12 +297,30 @@ void handleSerialCommand()
             Serial.println("");
 #ifdef ENABLE_SDCARD
             Serial.println("SD卡命令:");
-            Serial.println("  sd.info    - 显示SD卡详细信息");
-            Serial.println("  sd.test    - 测试GPS数据记录");
-            Serial.println("  sd.status  - 检查SD卡状态");
-            Serial.println("  sd.session - 显示当前GPS会话信息");
-            Serial.println("  sd.finish  - 结束当前GPS会话");
-            Serial.println("  sd.dirs    - 检查和创建目录结构");
+            Serial.println("  sd.info      - 显示SD卡详细信息");
+            Serial.println("  sd.status    - 检查SD卡状态");
+            Serial.println("  sd.help      - 显示SD卡命令帮助");
+            Serial.println("  sd.ls [path] - 列出目录内容");
+            Serial.println("  sd.tree      - 显示目录树结构");
+            Serial.println("  sd.cat <file>- 显示文件内容");
+            Serial.println("  sd.mkdir <dir> - 创建目录");
+            Serial.println("  sd.rm <path> - 删除文件或目录");
+            Serial.println("  sd.fmt       - 格式化说明");
+            Serial.println("  sd.test      - 测试GPS数据记录");
+            Serial.println("  sd.session   - 显示当前GPS会话信息");
+            Serial.println("  sd.finish    - 结束当前GPS会话");
+            Serial.println("  sd.dirs      - 检查和创建目录结构");
+            Serial.println("");
+#endif
+#ifdef ENABLE_GPS_LOGGER
+            Serial.println("GPS记录器命令:");
+            Serial.println("  gs         - 开始GPS记录会话");
+            Serial.println("  gt         - 停止GPS记录会话");
+            Serial.println("  gst        - 显示GPS记录状态");
+            Serial.println("  ge         - 导出当前会话为GeoJSON");
+            Serial.println("  gl         - 列出GPS日志文件");
+            Serial.println("  gi         - 显示GPS存储信息");
+            Serial.println("  gh         - 显示GPS命令帮助");
             Serial.println("");
 #endif
             Serial.println("提示: 命令不区分大小写");
