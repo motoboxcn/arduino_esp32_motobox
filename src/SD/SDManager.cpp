@@ -228,7 +228,13 @@ bool SDManager::saveDeviceInfo() {
         return false;
     }
 
-    const char* filename = "/device_info.json";
+    // 确保config目录存在
+    if (!createDirectory("/config")) {
+        debugPrint("❌ 无法创建config目录");
+        return false;
+    }
+
+    const char* filename = "/config/device.json";
     
 #ifdef SD_MODE_SPI
     File file = SD.open(filename, FILE_WRITE);
@@ -237,7 +243,7 @@ bool SDManager::saveDeviceInfo() {
 #endif
 
     if (!file) {
-        debugPrint("无法创建设备信息文件");
+        debugPrint("❌ 无法创建设备信息文件: " + String(filename));
         return false;
     }
 
@@ -245,15 +251,20 @@ bool SDManager::saveDeviceInfo() {
     String deviceInfo = "{\n";
     deviceInfo += "  \"device_id\": \"" + device.get_device_id() + "\",\n";
     deviceInfo += "  \"firmware_version\": \"" + String(FIRMWARE_VERSION) + "\",\n";
+    deviceInfo += "  \"hardware_version\": \"v1.0\",\n";
     deviceInfo += "  \"created_at\": \"" + getCurrentTimestamp() + "\",\n";
-    deviceInfo += "  \"sd_total_mb\": " + String((unsigned long)getTotalSpaceMB()) + ",\n";
-    deviceInfo += "  \"sd_free_mb\": " + String((unsigned long)getFreeSpaceMB()) + "\n";
+    deviceInfo += "  \"last_updated\": \"" + getCurrentTimestamp() + "\",\n";
+    deviceInfo += "  \"boot_count\": " + String(getBootCount()) + ",\n";
+    deviceInfo += "  \"sd_card\": {\n";
+    deviceInfo += "    \"total_mb\": " + String((unsigned long)getTotalSpaceMB()) + ",\n";
+    deviceInfo += "    \"free_mb\": " + String((unsigned long)getFreeSpaceMB()) + "\n";
+    deviceInfo += "  }\n";
     deviceInfo += "}";
 
     file.print(deviceInfo);
     file.close();
 
-    debugPrint("✅ 设备信息已保存");
+    debugPrint("✅ 设备信息已保存到 " + String(filename));
     return true;
 }
 
@@ -774,13 +785,14 @@ bool SDManager::handleSerialCommand(const String& command) {
         Serial.println("  2. 使用电脑格式化为FAT32格式");
         Serial.println("  3. 重新插入SD卡");
         Serial.println("  4. 重启设备");
-        return false;
+        return true; // 命令执行成功，只是不支持格式化功能
     }
     else if (command == "sd.help") {
         Serial.println("=== SD卡命令帮助 ===");
         Serial.println("基本命令:");
         Serial.println("  sd.info      - 显示SD卡详细信息");
         Serial.println("  sd.status    - 检查SD卡状态");
+        Serial.println("  sd.init      - 重新初始化SD卡并创建目录结构");
         Serial.println("  sd.help      - 显示此帮助信息");
         Serial.println("");
         Serial.println("文件操作:");
@@ -805,6 +817,73 @@ bool SDManager::handleSerialCommand(const String& command) {
         Serial.println("  sd.cat /config/device.json");
         Serial.println("  sd.rm /temp/old_file.txt");
         return true;
+    }
+    else if (command == "sd.init") {
+        Serial.println("=== 重新初始化SD卡 ===");
+        
+        if (!_initialized) {
+            Serial.println("❌ SD卡当前未初始化，尝试重新初始化...");
+            if (!begin()) {
+                Serial.println("❌ SD卡初始化失败");
+                return false;
+            }
+        }
+        
+        Serial.println("✅ SD卡已初始化");
+        
+        // 创建基本目录结构
+        Serial.println("🔧 创建基本目录结构...");
+        
+        bool success = true;
+        
+        // 创建基本目录
+        if (!createDirectory("/data")) {
+            Serial.println("❌ 创建 /data 目录失败");
+            success = false;
+        } else {
+            Serial.println("✅ /data 目录创建成功");
+        }
+        
+        if (!createDirectory("/data/gps")) {
+            Serial.println("❌ 创建 /data/gps 目录失败");
+            success = false;
+        } else {
+            Serial.println("✅ /data/gps 目录创建成功");
+        }
+        
+        if (!createDirectory("/config")) {
+            Serial.println("❌ 创建 /config 目录失败");
+            success = false;
+        } else {
+            Serial.println("✅ /config 目录创建成功");
+        }
+        
+        if (!createDirectory("/logs")) {
+            Serial.println("❌ 创建 /logs 目录失败");
+            success = false;
+        } else {
+            Serial.println("✅ /logs 目录创建成功");
+        }
+        
+        // 创建测试文件
+        Serial.println("📝 创建测试文件...");
+        String testContent = "{\n  \"device_id\": \"" + device.get_device_id() + "\",\n  \"firmware_version\": \"" + String(FIRMWARE_VERSION) + "\",\n  \"created_at\": \"" + getCurrentTimestamp() + "\"\n}";
+        
+        if (writeFile("/config/device.json", testContent)) {
+            Serial.println("✅ 测试文件 /config/device.json 创建成功");
+        } else {
+            Serial.println("❌ 测试文件创建失败");
+            success = false;
+        }
+        
+        if (success) {
+            Serial.println("🎉 SD卡初始化和目录结构创建完成！");
+            Serial.println("现在可以使用 sd.ls 和 sd.tree 查看结果");
+        } else {
+            Serial.println("⚠️ 部分操作失败，请检查SD卡状态");
+        }
+        
+        return success;
     }
     
     Serial.println("❌ 未知SD卡命令: " + command);
@@ -990,6 +1069,8 @@ bool SDManager::listDirectory(const String& path) {
         return false;
     }
 
+    Serial.println("🔍 正在打开目录: " + path);
+
 #ifdef SD_MODE_SPI
     File root = SD.open(path);
 #else
@@ -1007,6 +1088,8 @@ bool SDManager::listDirectory(const String& path) {
         return false;
     }
 
+    Serial.println("✅ 目录打开成功，开始读取内容...");
+
     File file = root.openNextFile();
     int fileCount = 0;
     int dirCount = 0;
@@ -1015,6 +1098,8 @@ bool SDManager::listDirectory(const String& path) {
     while (file) {
         String fileName = file.name();
         size_t fileSize = file.size();
+        
+        Serial.println("📋 发现项目: " + fileName + " (大小: " + String(fileSize) + ")");
         
         if (file.isDirectory()) {
             Serial.printf("  [DIR]  %s/\n", fileName.c_str());
@@ -1035,6 +1120,16 @@ bool SDManager::listDirectory(const String& path) {
     Serial.printf("目录: %d 个, 文件: %d 个\n", dirCount, fileCount);
     if (fileCount > 0) {
         Serial.printf("总大小: %s\n", formatFileSize(totalSize).c_str());
+    }
+    
+    if (fileCount == 0 && dirCount == 0) {
+        Serial.println("ℹ️ 目录为空或无法读取内容");
+        
+        // 额外的诊断信息
+        Serial.println("🔧 诊断信息:");
+        Serial.println("  - SD卡初始化状态: " + String(_initialized ? "已初始化" : "未初始化"));
+        Serial.println("  - 剩余空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
+        Serial.println("  - 总容量: " + String((unsigned long)getTotalSpaceMB()) + " MB");
     }
     
     return true;

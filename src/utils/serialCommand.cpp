@@ -299,6 +299,7 @@ void handleSerialCommand()
             Serial.println("SD卡命令:");
             Serial.println("  sd.info      - 显示SD卡详细信息");
             Serial.println("  sd.status    - 检查SD卡状态");
+            Serial.println("  sd.init      - 重新初始化SD卡并创建目录结构");
             Serial.println("  sd.help      - 显示SD卡命令帮助");
             Serial.println("  sd.ls [path] - 列出目录内容");
             Serial.println("  sd.tree      - 显示目录树结构");
