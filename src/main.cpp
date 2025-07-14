@@ -18,8 +18,7 @@
 #include "device.h"
 #include "Air780EG.h"
 #include "utils/serialCommand.h"
-#include "ota/OTAManager.h"
-#include "audio/VoicePrompt.h"
+#include "ota/SDCardOTA.h"
 
 #ifdef BAT_PIN
 #include "bat/BAT.h"
@@ -275,9 +274,6 @@ void setup()
   Serial.println("step 5");
   device.begin();
 
-  // 初始化语音提示
-  voicePrompt.begin();
-
   //================ SD卡初始化开始 ================
 #ifdef ENABLE_SDCARD
   Serial.println("step 6");
@@ -295,9 +291,22 @@ void setup()
 
     Serial.println("[SD] 设备信息已保存到SD卡");
 
-    // 初始化OTA管理器（需要在SD卡初始化后）
-    Serial.println("step 6.1");
-    otaManager.begin();
+    // 初始化SD卡OTA升级功能
+    Serial.println("step 6.1 - 初始化SD卡OTA升级");
+    sdCardOTA.begin();
+    
+    // 检查并执行SD卡升级（如果需要）
+    Serial.println("step 6.2 - 检查SD卡升级");
+    if (sdCardOTA.checkAndUpgrade()) {
+        Serial.println("[OTA] SD卡升级成功，设备将重启");
+        // 如果升级成功，设备会自动重启，不会执行到这里
+    } else {
+        String error = sdCardOTA.getLastError();
+        if (error.indexOf("未找到") < 0 && error.indexOf("不需要更新") < 0) {
+            // 只有真正的错误才打印，文件不存在或不需要更新是正常情况
+            Serial.println("[OTA] SD卡升级检查: " + error);
+        }
+    }
 
 #ifdef ENABLE_GPS_LOGGER
     // 初始化GPS记录器
