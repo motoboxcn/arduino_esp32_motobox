@@ -18,6 +18,8 @@
 #include "device.h"
 #include "Air780EG.h"
 #include "utils/serialCommand.h"
+#include "ota/OTAManager.h"
+#include "audio/VoicePrompt.h"
 
 #ifdef BAT_PIN
 #include "bat/BAT.h"
@@ -57,6 +59,10 @@ extern Ml307AtModem ml307_at;
 #include "SD/SDManager.h"
 #endif
 
+#ifdef ENABLE_GPS_LOGGER
+#include "SD/GPSLogger.h"
+#endif
+
 #ifdef ENABLE_AUDIO
 #include "audio/AudioManager.h"
 #endif
@@ -85,6 +91,11 @@ RTC_DATA_ATTR int bootCount = 0;
 #ifdef ENABLE_SDCARD
 // SD卡管理器
 SDManager sdManager;
+#endif
+
+#ifdef ENABLE_GPS_LOGGER
+// GPS记录器
+GPSLogger gpsLogger(&sdManager);
 #endif
 
 /**
@@ -186,13 +197,19 @@ void taskDataProcessing(void *parameter)
 
     // 记录GPS数据
     if (device_state.gnssReady && device_state.sdCardReady &&
-        currentTime - lastGNSSRecordTime >= 1000)
+        currentTime - lastGNSSRecordTime >= GPS_LOG_INTERVAL_MS)
     {
       lastGNSSRecordTime = currentTime;
 
-      // 记录到SD卡
-      sdManager.recordGPSData(
-          air780eg.getGNSS().gnss_data);
+      // 记录到SD卡（原有方法）
+      sdManager.recordGPSData(air780eg.getGNSS().gnss_data);
+
+#ifdef ENABLE_GPS_LOGGER
+      // 使用GPS记录器记录数据
+      if (air780eg.getGNSS().gnss_data.is_fixed) { // 有效GPS数据
+        gpsLogger.logGPSData(air780eg.getGNSS().gnss_data);
+      }
+#endif
     }
 #endif
 
@@ -258,6 +275,9 @@ void setup()
   Serial.println("step 5");
   device.begin();
 
+  // 初始化语音提示
+  voicePrompt.begin();
+
   //================ SD卡初始化开始 ================
 #ifdef ENABLE_SDCARD
   Serial.println("step 6");
@@ -274,6 +294,22 @@ void setup()
     sdManager.saveDeviceInfo();
 
     Serial.println("[SD] 设备信息已保存到SD卡");
+
+    // 初始化OTA管理器（需要在SD卡初始化后）
+    Serial.println("step 6.1");
+    otaManager.begin();
+
+#ifdef ENABLE_GPS_LOGGER
+    // 初始化GPS记录器
+    if (gpsLogger.begin()) {
+      Serial.println("[GPS] GPS记录器初始化成功");
+      // 自动开始GPS记录会话
+      gpsLogger.startNewSession();
+      Serial.println("[GPS] 自动开始GPS记录会话");
+    } else {
+      Serial.println("[GPS] GPS记录器初始化失败");
+    }
+#endif
   }
   else
   {

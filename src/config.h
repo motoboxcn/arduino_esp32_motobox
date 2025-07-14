@@ -13,6 +13,12 @@
 #define ENABLE_GPS
 #define USE_AIR780EG_GNSS
 
+// SD卡功能
+#define ENABLE_SDCARD
+
+// GPS记录功能
+#define ENABLE_GPS_LOGGER
+
 // 其他基础功能
 #define ENABLE_COMPASS
 #define ENABLE_IMU
@@ -65,5 +71,46 @@
 // GPS配置
 #define GPS_UPDATE_INTERVAL          1000
 #define GPS_TIMEOUT                  10000
+
+// OTA升级配置
+#define OTA_BATTERY_MIN_LEVEL        90   // 升级所需最低电池电量(%)
+#define OTA_CHECK_INTERVAL           3600000  // 在线升级检查间隔(1小时)
+#define OTA_DOWNLOAD_TIMEOUT         300000   // 下载超时时间(5分钟)
+#define OTA_MAX_RETRY_COUNT          3        // 最大重试次数
+
+// 默认引脚定义（如果platformio.ini中未定义）
+#ifndef BAT_PIN
+#define BAT_PIN                      36   // 电池电压检测引脚
+#endif
+
+#ifndef CHARGING_STATUS_PIN
+#define CHARGING_STATUS_PIN          2    // 充电状态检测引脚
+#endif
+
+#ifndef BUZZER_PIN
+#define BUZZER_PIN                   25   // 蜂鸣器引脚
+#endif
+
+// GPS记录器配置
+#ifdef ENABLE_GPS_LOGGER
+#define GPS_LOG_INTERVAL_MS          5000    // GPS数据记录间隔（毫秒）
+#define GPS_MIN_SATELLITES           4       // 最小卫星数量（有效GPS数据）
+#define GPS_MAX_LOG_FILES            100     // 最大日志文件数量
+#define GPS_AUTO_EXPORT_GEOJSON      false   // 是否自动导出GeoJSON
+#define GPS_STORAGE_CHECK_INTERVAL   600000  // 存储空间检查间隔（10分钟）
+#define GPS_LOG_DIR                  "/logs/gps"
+#define GPS_CONFIG_FILE              "/config/gps.json"
+#define GPS_COORDINATE_PRECISION     8       // 坐标精度（小数位数）
+#define GPS_ALTITUDE_PRECISION       2       // 高度精度
+#define GPS_SPEED_PRECISION          2       // 速度精度
+#define GPS_MIN_FREE_SPACE_MB        50      // 最小可用空间（MB）
+#define GPS_AUTO_CLEANUP_DAYS        30      // 自动清理天数
+
+#ifdef DEBUG
+#define GPS_DEBUG_ENABLED            true
+#else
+#define GPS_DEBUG_ENABLED            false
+#endif
+#endif // ENABLE_GPS_LOGGER
 
 #endif // CONFIG_H

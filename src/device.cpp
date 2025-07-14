@@ -3,6 +3,7 @@
 #include "config.h"
 #include "tft/TFT.h"
 #include "imu/qmi8658.h"
+#include "ota/OTAManager.h"
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -133,6 +134,14 @@ void mqttMessageCallback(const String &topic, const String &payload)
     Serial.printf("收到消息 [%s]: %s\n", topic.c_str(), payload.c_str());
     Serial.printf("主题长度: %d, 负载长度: %d\n", topic.length(), payload.length());
 
+    // 检查是否为OTA相关消息
+    if (topic.indexOf("/ota/") >= 0) {
+        Serial.println("🔄 处理OTA消息");
+        otaManager.handleMQTTMessage(topic, payload);
+        Serial.println("=== MQTT消息回调结束 (OTA处理) ===");
+        return;
+    }
+
     // 解析JSON
     StaticJsonDocument<256> doc;
     DeserializationError error = deserializeJson(doc, payload);
@@ -181,6 +190,12 @@ void mqttMessageCallback(const String &topic, const String &payload)
                 Serial.println("休眠时间不能小于0");
             }
         }
+        // 添加OTA检查命令
+        else if (strcmp(cmd, "check_ota") == 0)
+        {
+            Serial.println("🔄 手动触发OTA检查");
+            otaManager.checkForUpdates();
+        }
         // reboot
         else if (strcmp(cmd, "reboot") == 0 || strcmp(cmd, "restart") == 0)
         {
@@ -208,6 +223,17 @@ void mqttMessageCallback(const String &topic, const String &payload)
 #endif
 }
 
+// MQTT发布回调函数（用于OTA）
+void mqttPublishCallback(const char* topic, const char* payload) {
+#ifndef DISABLE_MQTT
+#ifdef USE_AIR780EG_GSM
+    air780eg.getMQTT().publish(topic, payload);
+#elif defined(USE_ML307_GSM)
+    ml307Mqtt.publish(topic, payload);
+#endif
+#endif
+}
+
 void mqttConnectionCallback(bool connected)
 {
 #ifndef DISABLE_MQTT
@@ -216,6 +242,19 @@ void mqttConnectionCallback(bool connected)
     {
         // 订阅控制主题
         air780eg.getMQTT().subscribe("vehicle/v1/" + device_state.device_id + "/ctrl/#", 1);
+        
+        // 订阅OTA主题
+        String deviceId = "ESP32_" + String((uint32_t)ESP.getEfuseMac(), HEX);
+        air780eg.getMQTT().subscribe("device/" + deviceId + "/ota/check", 1);
+        air780eg.getMQTT().subscribe("device/" + deviceId + "/ota/download", 1);
+        
+        Serial.println("✅ 已订阅控制和OTA主题");
+        
+        // 设置OTA管理器的MQTT发布回调
+        otaManager.setMQTTPublishCallback(mqttPublishCallback);
+        
+        // 设置OTA管理器的MQTT功能
+        otaManager.setupMQTTOTA();
     }
     else
     {
@@ -577,6 +616,11 @@ bool Device::initializeMQTT()
     // 添加定时任务
     air780eg.getMQTT().addScheduledTask("device_status", "vehicle/v1/" + device_state.device_id + "/telemetry/device", getDeviceStatusJSON, 30000, 0, false);
     air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, 1000, 0, false);
+    // 添加OTA检查定时任务（每小时检查一次）
+    air780eg.getMQTT().addScheduledTask("ota_check", "", []() -> String { 
+        otaManager.checkForUpdates(); 
+        return ""; 
+    }, OTA_CHECK_INTERVAL, 0, false);
     // air780eg.getMQTT().addScheduledTask("system_stats", mqttTopics.getSystemStatusTopic(), getSystemStatsJSON, 60, 0, false);
 
     // // 连接到MQTT服务器
