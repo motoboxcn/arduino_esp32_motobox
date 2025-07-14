@@ -15,11 +15,8 @@ SDCardOTA::SDCardOTA()
 void SDCardOTA::begin() {
     logMessage("SD卡OTA升级模块初始化");
     logMessage("当前版本: " + currentVersion);
-    logMessage("支持的固件文件格式:");
-    logMessage("  - firmware.bin (配合version.txt)");
-    logMessage("  - firmware_v4.1.0.bin");
-    logMessage("  - motobox_v4.1.0.bin");
-    logMessage("  - esp32_v4.1.0.bin");
+    logMessage("支持的固件文件格式: motobox_v*.bin");
+    logMessage("示例: motobox_v4.1.0.bin, motobox_v4.2.0.bin");
 }
 
 bool SDCardOTA::checkAndUpgrade() {
@@ -96,25 +93,15 @@ bool SDCardOTA::scanFirmwareFiles() {
             firmware.fileSize = file.size();
             firmware.isValid = false;
             
-            // 尝试从文件名提取版本号
+            // 从文件名提取版本号（只支持motobox格式）
             firmware.version = extractVersionFromFileName(fileName);
-            
-            // 如果文件名中没有版本号，尝试从对应的版本文件读取
-            if (firmware.version.isEmpty()) {
-                firmware.version = extractVersionFromFile("/" + fileName.substring(0, fileName.lastIndexOf('.')) + "_version.txt");
-            }
-            
-            // 如果是标准的firmware.bin，尝试从version.txt读取
-            if (firmware.version.isEmpty() && fileName == "firmware.bin") {
-                firmware.version = extractVersionFromFile("/version.txt");
-            }
             
             if (!firmware.version.isEmpty()) {
                 firmware.isValid = true;
                 firmwareList.push_back(firmware);
                 logMessage("✅ 找到固件: " + fileName + " (版本: " + firmware.version + ", 大小: " + String(firmware.fileSize) + " 字节)");
             } else {
-                logMessage("⚠️ 跳过固件: " + fileName + " (无法确定版本号)");
+                logMessage("⚠️ 跳过固件: " + fileName + " (不是motobox格式或无法确定版本号)");
             }
         }
         
@@ -130,25 +117,23 @@ bool SDCardOTA::scanFirmwareFiles() {
 bool SDCardOTA::isFirmwareFile(String fileName) {
     fileName.toLowerCase();
     
-    // 支持的固件文件名模式
-    return (fileName.endsWith(".bin") && 
-            (fileName.startsWith("firmware") || 
-             fileName.startsWith("motobox") || 
-             fileName.startsWith("esp32") ||
-             fileName.indexOf("firmware") >= 0));
+    // 只支持 motobox_v*.bin 格式的固件文件
+    return (fileName.endsWith(".bin") && fileName.startsWith("motobox_v"));
 }
 
 String SDCardOTA::extractVersionFromFileName(String fileName) {
-    // 从文件名中提取版本号
-    // 支持格式: firmware_v4.1.0.bin, motobox_v4.1.0.bin, esp32_v4.1.0.bin
+    // 从 motobox_v4.1.0.bin 格式中提取版本号
     
-    int vIndex = fileName.indexOf("_v");
-    if (vIndex < 0) {
-        vIndex = fileName.indexOf("-v");
+    String lowerFileName = fileName;
+    lowerFileName.toLowerCase();
+    
+    if (!lowerFileName.startsWith("motobox_v")) {
+        return "";
     }
     
+    int vIndex = fileName.indexOf("_v");
     if (vIndex >= 0) {
-        int startIndex = vIndex + 2; // 跳过 "_v" 或 "-v"
+        int startIndex = vIndex + 2; // 跳过 "_v"
         int endIndex = fileName.lastIndexOf(".bin");
         
         if (endIndex > startIndex) {
