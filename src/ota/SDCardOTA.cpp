@@ -1,13 +1,12 @@
 #include "SDCardOTA.h"
 #include "config.h"
+#include <vector>
 
 // 全局实例
 SDCardOTA sdCardOTA;
 
 SDCardOTA::SDCardOTA() 
-    : firmwareFileName("firmware.bin"),
-      versionFileName("version.txt"),
-      upgrading(false),
+    : upgrading(false),
       progress(0) {
     
     currentVersion = String(FIRMWARE_VERSION);
@@ -16,8 +15,11 @@ SDCardOTA::SDCardOTA()
 void SDCardOTA::begin() {
     logMessage("SD卡OTA升级模块初始化");
     logMessage("当前版本: " + currentVersion);
-    logMessage("固件文件: " + firmwareFileName);
-    logMessage("版本文件: " + versionFileName);
+    logMessage("支持的固件文件格式:");
+    logMessage("  - firmware.bin (配合version.txt)");
+    logMessage("  - firmware_v4.1.0.bin");
+    logMessage("  - motobox_v4.1.0.bin");
+    logMessage("  - esp32_v4.1.0.bin");
 }
 
 bool SDCardOTA::checkAndUpgrade() {
@@ -30,27 +32,30 @@ bool SDCardOTA::checkAndUpgrade() {
         return false;
     }
     
-    // 检查固件文件是否存在
-    if (!checkFileExists("/" + firmwareFileName)) {
-        lastError = "SD卡中未找到固件文件: " + firmwareFileName;
+    // 扫描SD卡中的固件文件
+    if (!scanFirmwareFiles()) {
+        lastError = "SD卡中未找到有效的固件文件";
         logMessage("❌ " + lastError);
         return false;
     }
     
-    // 读取版本信息
-    String sdVersion = readVersionFromSD();
-    if (sdVersion.isEmpty()) {
-        lastError = "无法读取SD卡版本信息";
+    // 打印找到的固件列表
+    printFirmwareList();
+    
+    // 获取最新版本的固件
+    FirmwareInfo latestFirmware = getLatestFirmware();
+    
+    if (!latestFirmware.isValid) {
+        lastError = "未找到有效的固件文件";
         logMessage("❌ " + lastError);
         return false;
     }
     
-    logMessage("SD卡固件版本: " + sdVersion);
-    logMessage("当前固件版本: " + currentVersion);
+    logMessage("选择的固件: " + latestFirmware.fileName + " (版本: " + latestFirmware.version + ")");
     
     // 检查版本是否需要更新
-    if (!checkVersionNewer(sdVersion)) {
-        lastError = "SD卡版本不需要更新 (当前: " + currentVersion + ", SD卡: " + sdVersion + ")";
+    if (!checkVersionNewer(latestFirmware.version)) {
+        lastError = "固件版本不需要更新 (当前: " + currentVersion + ", 最新: " + latestFirmware.version + ")";
         logMessage("ℹ️ " + lastError);
         return false;
     }
@@ -63,11 +68,145 @@ bool SDCardOTA::checkAndUpgrade() {
         return false;
     }
     
-    logMessage("✅ 所有升级条件满足，开始升级");
+    logMessage("✅ 所有升级条件满足，开始升级到版本: " + latestFirmware.version);
     playUpgradeSound(1); // 开始升级音
     
     // 执行升级
-    return performUpgrade();
+    return performUpgrade(latestFirmware);
+}
+
+bool SDCardOTA::scanFirmwareFiles() {
+    firmwareList.clear();
+    
+    File root = SD.open("/");
+    if (!root) {
+        logMessage("❌ 无法打开SD卡根目录");
+        return false;
+    }
+    
+    logMessage("🔍 扫描SD卡中的固件文件...");
+    
+    File file = root.openNextFile();
+    while (file) {
+        String fileName = file.name();
+        
+        if (!file.isDirectory() && isFirmwareFile(fileName)) {
+            FirmwareInfo firmware;
+            firmware.fileName = fileName;
+            firmware.fileSize = file.size();
+            firmware.isValid = false;
+            
+            // 尝试从文件名提取版本号
+            firmware.version = extractVersionFromFileName(fileName);
+            
+            // 如果文件名中没有版本号，尝试从对应的版本文件读取
+            if (firmware.version.isEmpty()) {
+                firmware.version = extractVersionFromFile("/" + fileName.substring(0, fileName.lastIndexOf('.')) + "_version.txt");
+            }
+            
+            // 如果是标准的firmware.bin，尝试从version.txt读取
+            if (firmware.version.isEmpty() && fileName == "firmware.bin") {
+                firmware.version = extractVersionFromFile("/version.txt");
+            }
+            
+            if (!firmware.version.isEmpty()) {
+                firmware.isValid = true;
+                firmwareList.push_back(firmware);
+                logMessage("✅ 找到固件: " + fileName + " (版本: " + firmware.version + ", 大小: " + String(firmware.fileSize) + " 字节)");
+            } else {
+                logMessage("⚠️ 跳过固件: " + fileName + " (无法确定版本号)");
+            }
+        }
+        
+        file = root.openNextFile();
+    }
+    
+    root.close();
+    
+    logMessage("📊 扫描完成，找到 " + String(firmwareList.size()) + " 个有效固件文件");
+    return firmwareList.size() > 0;
+}
+
+bool SDCardOTA::isFirmwareFile(String fileName) {
+    fileName.toLowerCase();
+    
+    // 支持的固件文件名模式
+    return (fileName.endsWith(".bin") && 
+            (fileName.startsWith("firmware") || 
+             fileName.startsWith("motobox") || 
+             fileName.startsWith("esp32") ||
+             fileName.indexOf("firmware") >= 0));
+}
+
+String SDCardOTA::extractVersionFromFileName(String fileName) {
+    // 从文件名中提取版本号
+    // 支持格式: firmware_v4.1.0.bin, motobox_v4.1.0.bin, esp32_v4.1.0.bin
+    
+    int vIndex = fileName.indexOf("_v");
+    if (vIndex < 0) {
+        vIndex = fileName.indexOf("-v");
+    }
+    
+    if (vIndex >= 0) {
+        int startIndex = vIndex + 2; // 跳过 "_v" 或 "-v"
+        int endIndex = fileName.lastIndexOf(".bin");
+        
+        if (endIndex > startIndex) {
+            String version = fileName.substring(startIndex, endIndex);
+            // 添加v前缀（如果没有的话）
+            if (!version.startsWith("v")) {
+                version = "v" + version;
+            }
+            return version;
+        }
+    }
+    
+    return "";
+}
+
+String SDCardOTA::extractVersionFromFile(String filePath) {
+    File versionFile = SD.open(filePath);
+    if (versionFile) {
+        String version = versionFile.readString();
+        versionFile.close();
+        version.trim();
+        return version;
+    }
+    return "";
+}
+
+FirmwareInfo SDCardOTA::getLatestFirmware() {
+    FirmwareInfo latest;
+    latest.isValid = false;
+    
+    for (const auto& firmware : firmwareList) {
+        if (!firmware.isValid) continue;
+        
+        if (!latest.isValid || compareVersions(firmware.version, latest.version) > 0) {
+            latest = firmware;
+        }
+    }
+    
+    return latest;
+}
+
+void SDCardOTA::printFirmwareList() {
+    if (firmwareList.empty()) {
+        logMessage("📋 未找到固件文件");
+        return;
+    }
+    
+    logMessage("📋 找到的固件文件列表:");
+    for (size_t i = 0; i < firmwareList.size(); i++) {
+        const auto& firmware = firmwareList[i];
+        String sizeStr = String(firmware.fileSize / 1024.0, 1) + " KB";
+        if (firmware.fileSize >= 1024 * 1024) {
+            sizeStr = String(firmware.fileSize / (1024.0 * 1024.0), 1) + " MB";
+        }
+        
+        logMessage("  " + String(i + 1) + ". " + firmware.fileName + 
+                  " (版本: " + firmware.version + ", 大小: " + sizeStr + ")");
+    }
 }
 
 bool SDCardOTA::checkBatteryLevel() {
@@ -83,10 +222,6 @@ bool SDCardOTA::checkBatteryLevel() {
 
 bool SDCardOTA::checkVersionNewer(String newVersion) {
     return compareVersions(newVersion, currentVersion) > 0;
-}
-
-bool SDCardOTA::checkFileExists(String filePath) {
-    return SD.exists(filePath);
 }
 
 int SDCardOTA::compareVersions(String version1, String version2) {
@@ -112,41 +247,30 @@ int SDCardOTA::compareVersions(String version1, String version2) {
     return patch1 - patch2;
 }
 
-String SDCardOTA::readVersionFromSD() {
-    File versionFile = SD.open("/" + versionFileName);
-    if (versionFile) {
-        String version = versionFile.readString();
-        versionFile.close();
-        version.trim();
-        return version;
-    }
-    return "";
-}
-
-bool SDCardOTA::performUpgrade() {
+bool SDCardOTA::performUpgrade(const FirmwareInfo& firmware) {
     upgrading = true;
     progress = 0;
     
-    logMessage("🔄 开始从SD卡升级固件");
+    logMessage("🔄 开始升级固件: " + firmware.fileName);
+    logMessage("📦 固件版本: " + firmware.version);
+    logMessage("📏 文件大小: " + String(firmware.fileSize) + " 字节");
+    
     playUpgradeSound(2); // 升级进行中音
     
-    File firmware = SD.open("/" + firmwareFileName);
-    if (!firmware) {
-        lastError = "无法打开固件文件";
+    File firmwareFile = SD.open("/" + firmware.fileName);
+    if (!firmwareFile) {
+        lastError = "无法打开固件文件: " + firmware.fileName;
         logMessage("❌ " + lastError);
         playUpgradeSound(4); // 错误音
         upgrading = false;
         return false;
     }
     
-    size_t fileSize = firmware.size();
-    logMessage("固件文件大小: " + String(fileSize) + " 字节");
-    
     // 开始OTA升级
-    if (!Update.begin(fileSize)) {
+    if (!Update.begin(firmware.fileSize)) {
         lastError = "OTA升级初始化失败: " + String(Update.errorString());
         logMessage("❌ " + lastError);
-        firmware.close();
+        firmwareFile.close();
         playUpgradeSound(4); // 错误音
         upgrading = false;
         return false;
@@ -156,16 +280,16 @@ bool SDCardOTA::performUpgrade() {
     size_t written = 0;
     uint8_t buffer[1024];
     
-    while (firmware.available()) {
-        size_t readBytes = firmware.read(buffer, sizeof(buffer));
+    while (firmwareFile.available()) {
+        size_t readBytes = firmwareFile.read(buffer, sizeof(buffer));
         written += Update.write(buffer, readBytes);
         
         // 更新进度
-        progress = (written * 100) / fileSize;
+        progress = (written * 100) / firmware.fileSize;
         
         // 每20%播放一次进度提示
         if (progress % 20 == 0 && progress > 0) {
-            logMessage("升级进度: " + String(progress) + "%");
+            logMessage("升级进度: " + String(progress) + "% (" + String(written) + "/" + String(firmware.fileSize) + " 字节)");
             playUpgradeSound(5); // 进度音
         }
         
@@ -173,16 +297,21 @@ bool SDCardOTA::performUpgrade() {
         yield();
     }
     
-    firmware.close();
+    firmwareFile.close();
     
     // 完成升级
     if (Update.end(true)) {
-        logMessage("✅ 固件升级成功！写入 " + String(written) + " 字节");
+        logMessage("✅ 固件升级成功！");
+        logMessage("📊 升级统计:");
+        logMessage("  - 源文件: " + firmware.fileName);
+        logMessage("  - 版本: " + currentVersion + " → " + firmware.version);
+        logMessage("  - 写入字节: " + String(written) + "/" + String(firmware.fileSize));
+        
         playUpgradeSound(3); // 成功音
         
         delay(2000); // 等待2秒让用户听到成功提示音
         
-        logMessage("🔄 设备即将重启...");
+        logMessage("🔄 设备即将重启到新版本...");
         ESP.restart();
         return true;
     } else {
