@@ -337,10 +337,6 @@ void setup()
 
 #ifdef ENABLE_AUDIO
   Serial.println("音频功能: ✅ 编译时已启用");
-  if (device_state.audioReady)
-  {
-    audioManager.playBootSuccessSound();
-  }
 #else
   Serial.println("音频功能: ❌ 编译时未启用");
 #endif

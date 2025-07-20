@@ -5,8 +5,8 @@ static const char *TAG = "Compass";
 
 
 #ifdef ENABLE_COMPASS
-// 如果没有定义IMU引脚，使用GPS_COMPASS引脚作为备选
-Compass compass(GPS_COMPASS_SDA, GPS_COMPASS_SCL);
+// 使用共享I2C管理器，不需要指定引脚
+Compass compass;
 
 // 初始化全局罗盘数据
 compass_data_t compass_data = {
@@ -80,9 +80,7 @@ void printCompassData() {
 /**
  * @brief QMC5883L 罗盘传感器驱动实现
  */
-Compass::Compass(int sda, int scl) : _wire(Wire) {
-    _sda = sda;
-    _scl = scl;
+Compass::Compass() {
     _declination = -6.5f;  // 默认磁偏角，需要根据地理位置调整
     _initialized = false;
     _lastReadTime = 0;  
@@ -90,19 +88,14 @@ Compass::Compass(int sda, int scl) : _wire(Wire) {
 }
 
 bool Compass::begin() {
-    ESP_LOGI(TAG, "初始化: SDA=%d, SCL=%d, 磁偏角=%.2f°", _sda, _scl, _declination);
+    ESP_LOGI(TAG, "初始化指南针，磁偏角=%.2f°", _declination);
     
-    // 先确保 Wire 是干净的
-    _wire.end();
-    delay(50);
-    
-    // 初始化I2C
-    bool wireBeginSuccess = _wire.begin(_sda, _scl);
-    if (!wireBeginSuccess) {
-        ESP_LOGE(TAG, "Wire.begin() 失败!");
+    // 使用共享I2C管理器（如果IMU已经初始化过，这里会跳过重复初始化）
+    if (!I2CManager::getInstance().isInitialized()) {
+        ESP_LOGE(TAG, "共享I2C未初始化，请先初始化I2C管理器!");
         return false;
     }
-    ESP_LOGI(TAG, "Wire.begin() 成功");
+    ESP_LOGI(TAG, "使用共享I2C总线");
 
     delay(100);  // 给一些初始化时间
     

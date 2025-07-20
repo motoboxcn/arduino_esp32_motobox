@@ -2,13 +2,7 @@
 
 #define USE_WIRE
 
-#ifdef ENABLE_IMU
-#ifdef IMU_INT_PIN
-IMU imu(IMU_SDA_PIN, IMU_SCL_PIN, IMU_INT_PIN);
-#else
-IMU imu(IMU_SDA_PIN, IMU_SCL_PIN);
-#endif
-#endif
+IMU imu(IMU_INT_PIN);
 
 imu_data_t imu_data;
 
@@ -18,14 +12,11 @@ void IRAM_ATTR IMU::motionISR()
     IMU::motionInterruptFlag = true;
 }
 
-IMU::IMU(int sda, int scl, int motionIntPin)
-    : _wire(Wire1),
-    motionIntPin(motionIntPin),
+IMU::IMU(int motionIntPin)
+    : motionIntPin(motionIntPin),
     _debug(false),
     _lastDebugPrintTime(0)
 {
-    this->sda = sda;
-    this->scl = scl;
     this->motionIntPin = motionIntPin;
     motionThreshold = MOTION_DETECTION_THRESHOLD_DEFAULT;
     motionDetectionEnabled = false;
@@ -42,17 +33,25 @@ void IMU::debugPrint(const String &message)
 
 void IMU::begin()
 {
-    Serial.println("[IMU] 初始化完成");
+    Serial.println("[IMU] 初始化开始");
 #ifdef USE_WIRE
-    Serial.printf("[IMU] SDA: %d, SCL: %d\n", sda, scl);
-    if (!qmi.begin(_wire, QMI8658_L_SLAVE_ADDRESS, sda, scl))
+    Serial.printf("[IMU] 使用共享I2C总线, INT引脚: %d\n", motionIntPin);
+    
+    // 使用共享I2C管理器
+    if (!I2CManager::getInstance().isInitialized()) {
+        Serial.println("[IMU] ❌ 共享I2C未初始化，请先初始化I2C管理器");
+        return;
+    }
+    
+    TwoWire& wire = getSharedWire();
+    if (!qmi.begin(wire, QMI8658_L_SLAVE_ADDRESS, IIC_SDA_PIN, IIC_SCL_PIN))
     {
         Serial.println("[IMU] 初始化失败");
         for (int i = 0; i < 3; i++)
         {
             delay(1000);
             Serial.println("[IMU] 重试初始化...");
-            if (qmi.begin(_wire, QMI8658_L_SLAVE_ADDRESS, sda, scl))
+            if (qmi.begin(wire, QMI8658_L_SLAVE_ADDRESS, IIC_SDA_PIN, IIC_SCL_PIN))
             {
                 Serial.println("[IMU] 重试成功");
                 break;
@@ -191,7 +190,8 @@ bool IMU::restoreFromDeepSleep()
     delay(500); // 增加到500ms，确保电源稳定
 
     // 重新初始化I2C总线
-    _wire.begin(sda, scl);
+    TwoWire& wire = getSharedWire();
+    initSharedI2C(IIC_SDA_PIN, IIC_SCL_PIN);
     delay(50); // 等待I2C总线稳定
 
     // 重置设备

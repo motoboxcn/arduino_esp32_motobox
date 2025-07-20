@@ -9,6 +9,13 @@
 #include <SD.h>
 #else
 #include <SD_MMC.h>
+// ESP32 4位SDIO模式固定引脚配置
+#define SDCARD_CLK_IO  14  // 时钟线（固定）
+#define SDCARD_CMD_IO  15  // 命令线（固定）
+#define SDCARD_D0_IO   2   // 数据线0（固定）
+#define SDCARD_D1_IO   4   // 数据线1（固定）
+#define SDCARD_D2_IO   12  // 数据线2（固定）
+#define SDCARD_D3_IO   13  // 数据线3（固定）
 #endif
 
 #include <esp_system.h>

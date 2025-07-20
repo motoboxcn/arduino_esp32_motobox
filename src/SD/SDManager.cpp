@@ -15,64 +15,21 @@ bool SDManager::begin() {
 
     debugPrint("正在初始化SD卡...");
 
-#ifdef SD_MODE_SPI
-    // SPI模式初始化
-    debugPrint("使用SPI模式，引脚配置: CS=" + String(SD_CS_PIN) + ", MOSI=" + String(SD_MOSI_PIN) + ", MISO=" + String(SD_MISO_PIN) + ", SCK=" + String(SD_SCK_PIN));
+    // 4位SDIO模式初始化
+    debugPrint("使用4位SDIO模式");
+    debugPrint("引脚配置: CLK=" + String(SDCARD_CLK_IO) + ", CMD=" + String(SDCARD_CMD_IO) + 
+               ", D0=" + String(SDCARD_D0_IO) + ", D1=" + String(SDCARD_D1_IO) + 
+               ", D2=" + String(SDCARD_D2_IO) + ", D3=" + String(SDCARD_D3_IO));
     
-    SPI.begin(SD_SCK_PIN, SD_MISO_PIN, SD_MOSI_PIN, SD_CS_PIN);
-    
-    if (!SD.begin(SD_CS_PIN)) {
-        debugPrint("❌ SD卡初始化失败");
+    // 使用4位SDIO模式初始化
+    if (!SD_MMC.begin("/sdcard", true, false, SDMMC_FREQ_DEFAULT, 4)) {
+        debugPrint("❌ SD卡4位SDIO模式初始化失败");
         debugPrint("可能的原因：");
         debugPrint("  1. 未插入SD卡");
         debugPrint("  2. SD卡损坏或格式不支持");
         debugPrint("  3. 硬件连接错误");
         debugPrint("  4. SD卡格式不是FAT32");
-        debugPrint("请检查SD卡并重试");
-        return false;
-    }
-    
-    // 检查SD卡类型
-    uint8_t cardType = SD.cardType();
-    if (cardType == CARD_NONE) {
-        debugPrint("❌ 未检测到SD卡");
-        debugPrint("请确认SD卡已正确插入");
-        return false;
-    }
-    
-    // 设置初始化标志 - 在获取容量信息之前设置
-    _initialized = true;
-    
-    String cardTypeStr;
-    switch (cardType) {
-        case CARD_MMC:
-            cardTypeStr = "MMC";
-            break;
-        case CARD_SD:
-            cardTypeStr = "SDSC";
-            break;
-        case CARD_SDHC:
-            cardTypeStr = "SDHC";
-            break;
-        default:
-            cardTypeStr = "未知";
-            break;
-    }
-    
-    debugPrint("✅ SD卡初始化成功");
-    debugPrint("SD卡类型: " + cardTypeStr);
-    debugPrint("SD卡容量: " + String((unsigned long)getTotalSpaceMB()) + " MB");
-    debugPrint("可用空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
-    
-#else
-    // MMC模式初始化
-    debugPrint("使用MMC模式");
-    if (!SD_MMC.begin()) {
-        debugPrint("❌ SD卡MMC模式初始化失败");
-        debugPrint("可能的原因：");
-        debugPrint("  1. 未插入SD卡");
-        debugPrint("  2. SD卡损坏");
-        debugPrint("  3. MMC模式不支持此SD卡");
+        debugPrint("  5. 引脚配置错误");
         debugPrint("请检查SD卡并重试");
         return false;
     }
@@ -80,10 +37,9 @@ bool SDManager::begin() {
     // 设置初始化标志
     _initialized = true;
     
-    debugPrint("✅ SD卡MMC模式初始化成功");
+    debugPrint("✅ SD卡4位SDIO模式初始化成功");
     debugPrint("SD卡容量: " + String((unsigned long)getTotalSpaceMB()) + " MB");
     debugPrint("可用空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
-#endif
 
     // 创建必要的目录结构
     if (!createDirectoryStructure()) {
@@ -103,12 +59,7 @@ void SDManager::end() {
         return;
     }
 
-#ifdef SD_MODE_SPI
-    SD.end();
-#else
     SD_MMC.end();
-#endif
-
     _initialized = false;
     debugPrint("SD卡已断开");
 }
@@ -124,11 +75,7 @@ uint64_t SDManager::getTotalSpaceMB() {
     }
 
     try {
-#ifdef SD_MODE_SPI
-        return SD.totalBytes() / (1024 * 1024);
-#else
         return SD_MMC.totalBytes() / (1024 * 1024);
-#endif
     } catch (...) {
         debugPrint("⚠️ 获取SD卡容量失败，可能SD卡已移除");
         return 0;
@@ -142,11 +89,7 @@ uint64_t SDManager::getFreeSpaceMB() {
     }
 
     try {
-#ifdef SD_MODE_SPI
-        return (SD.totalBytes() - SD.usedBytes()) / (1024 * 1024);
-#else
         return (SD_MMC.totalBytes() - SD_MMC.usedBytes()) / (1024 * 1024);
-#endif
     } catch (...) {
         debugPrint("⚠️ 获取SD卡剩余空间失败，可能SD卡已移除");
         return 0;
@@ -192,11 +135,7 @@ bool SDManager::createDirectory(const char* path) {
 
     bool success = false;
     try {
-#ifdef SD_MODE_SPI
-        success = SD.mkdir(path);
-#else
         success = SD_MMC.mkdir(path);
-#endif
     } catch (...) {
         debugPrint("❌ 创建目录时发生异常: " + String(path));
         return false;
@@ -236,11 +175,7 @@ bool SDManager::saveDeviceInfo() {
 
     const char* filename = "/config/device.json";
     
-#ifdef SD_MODE_SPI
-    File file = SD.open(filename, FILE_WRITE);
-#else
     File file = SD_MMC.open(filename, FILE_WRITE);
-#endif
 
     if (!file) {
         debugPrint("❌ 无法创建设备信息文件: " + String(filename));
@@ -287,11 +222,7 @@ bool SDManager::recordGPSData(gnss_data_t &gnss_data) {
     bool fileExists = false;
     
     try {
-#ifdef SD_MODE_SPI
-        File testFile = SD.open(filename.c_str(), FILE_READ);
-#else
         File testFile = SD_MMC.open(filename.c_str(), FILE_READ);
-#endif
         
         if (testFile) {
             fileExists = true;
@@ -306,11 +237,7 @@ bool SDManager::recordGPSData(gnss_data_t &gnss_data) {
     // 打开文件进行写入
     File file;
     try {
-#ifdef SD_MODE_SPI
-        file = SD.open(filename.c_str(), FILE_APPEND);
-#else
         file = SD_MMC.open(filename.c_str(), FILE_APPEND);
-#endif
     } catch (...) {
         debugPrint("⚠️ 打开GPS数据文件失败，可能SD卡已移除");
         return false;
@@ -446,11 +373,7 @@ bool SDManager::finishGPSSession() {
     // 检查文件是否存在
     File testFile;
     try {
-#ifdef SD_MODE_SPI
-        testFile = SD.open(filename.c_str(), FILE_READ);
-#else
         testFile = SD_MMC.open(filename.c_str(), FILE_READ);
-#endif
     } catch (...) {
         debugPrint("⚠️ 检查GPS文件失败");
         return false;
@@ -465,11 +388,7 @@ bool SDManager::finishGPSSession() {
     // 以追加模式打开文件，添加GeoJSON结尾
     File file;
     try {
-#ifdef SD_MODE_SPI
-        file = SD.open(filename.c_str(), FILE_APPEND);
-#else
         file = SD_MMC.open(filename.c_str(), FILE_APPEND);
-#endif
     } catch (...) {
         debugPrint("⚠️ 打开GPS文件失败");
         return false;
@@ -525,11 +444,7 @@ bool SDManager::directoryExists(const char* path) {
 
     File dir;
     try {
-#ifdef SD_MODE_SPI
-        dir = SD.open(path);
-#else
         dir = SD_MMC.open(path);
-#endif
     } catch (...) {
         return false;
     }
@@ -899,11 +814,7 @@ bool SDManager::writeFile(const String& path, const String& content) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    File file = SD.open(path, FILE_WRITE);
-#else
     File file = SD_MMC.open(path, FILE_WRITE);
-#endif
 
     if (!file) {
         debugPrint("❌ 无法创建文件: " + path);
@@ -927,11 +838,7 @@ bool SDManager::appendFile(const String& path, const String& content) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    File file = SD.open(path, FILE_APPEND);
-#else
     File file = SD_MMC.open(path, FILE_APPEND);
-#endif
 
     if (!file) {
         debugPrint("❌ 无法打开文件进行追加: " + path);
@@ -955,11 +862,7 @@ String SDManager::readFile(const String& path) {
         return "";
     }
 
-#ifdef SD_MODE_SPI
-    File file = SD.open(path, FILE_READ);
-#else
     File file = SD_MMC.open(path, FILE_READ);
-#endif
 
     if (!file) {
         debugPrint("❌ 无法打开文件: " + path);
@@ -981,11 +884,7 @@ bool SDManager::deleteFile(const String& path) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    return SD.remove(path);
-#else
     return SD_MMC.remove(path);
-#endif
 }
 
 bool SDManager::fileExists(const String& path) {
@@ -993,11 +892,7 @@ bool SDManager::fileExists(const String& path) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    return SD.exists(path);
-#else
     return SD_MMC.exists(path);
-#endif
 }
 
 bool SDManager::createDir(const String& path) {
@@ -1011,11 +906,7 @@ bool SDManager::createDir(const String& path) {
         return true;
     }
 
-#ifdef SD_MODE_SPI
-    return SD.mkdir(path);
-#else
     return SD_MMC.mkdir(path);
-#endif
 }
 
 void SDManager::listDir(const String& path) {
@@ -1024,11 +915,7 @@ void SDManager::listDir(const String& path) {
         return;
     }
 
-#ifdef SD_MODE_SPI
-    File root = SD.open(path);
-#else
     File root = SD_MMC.open(path);
-#endif
 
     if (!root) {
         debugPrint("❌ 无法打开目录: " + path);
@@ -1071,11 +958,7 @@ bool SDManager::listDirectory(const String& path) {
 
     Serial.println("🔍 正在打开目录: " + path);
 
-#ifdef SD_MODE_SPI
-    File root = SD.open(path);
-#else
     File root = SD_MMC.open(path);
-#endif
 
     if (!root) {
         Serial.println("❌ 无法打开目录: " + path);
@@ -1140,11 +1023,7 @@ bool SDManager::listDirectoryTree(const String& path, int depth, int maxDepth) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    File root = SD.open(path);
-#else
     File root = SD_MMC.open(path);
-#endif
 
     if (!root || !root.isDirectory()) {
         if (root) root.close();
@@ -1207,12 +1086,7 @@ bool SDManager::createDirectory(const String& path) {
         }
     }
 
-#ifdef SD_MODE_SPI
-    bool result = SD.mkdir(path);
-#else
     bool result = SD_MMC.mkdir(path);
-#endif
-
     return result;
 }
 
@@ -1221,11 +1095,7 @@ bool SDManager::displayFileContent(const String& path) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    File file = SD.open(path);
-#else
     File file = SD_MMC.open(path);
-#endif
 
     if (!file) {
         Serial.println("❌ 无法打开文件: " + path);
@@ -1266,11 +1136,7 @@ bool SDManager::removeFile(const String& path) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    return SD.remove(path);
-#else
     return SD_MMC.remove(path);
-#endif
 }
 
 bool SDManager::removeDirectory(const String& path) {
@@ -1278,11 +1144,7 @@ bool SDManager::removeDirectory(const String& path) {
         return false;
     }
 
-#ifdef SD_MODE_SPI
-    File root = SD.open(path);
-#else
     File root = SD_MMC.open(path);
-#endif
 
     if (!root || !root.isDirectory()) {
         if (root) root.close();
@@ -1311,11 +1173,7 @@ bool SDManager::removeDirectory(const String& path) {
     root.close();
 
     // 删除空目录
-#ifdef SD_MODE_SPI
-    return SD.rmdir(path);
-#else
     return SD_MMC.rmdir(path);
-#endif
 }
 
 // 辅助方法：格式化文件大小显示

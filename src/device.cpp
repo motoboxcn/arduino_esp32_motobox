@@ -282,13 +282,23 @@ void Device::begin()
     bc.begin();
 #endif
 
-#ifdef ENABLE_COMPASS
-    compass.begin();
-#endif
+    // 统一初始化I2C设备（IMU和Compass共用同一个I2C总线）
+    Serial.println("[I2C] 开始初始化I2C设备...");
+    Serial.printf("[I2C] 引脚配置 - SDA:%d, SCL:%d\n", IIC_SDA_PIN, IIC_SCL_PIN);
+    
+    // 首先初始化共享I2C管理器
+    if (!initSharedI2C(IIC_SDA_PIN, IIC_SCL_PIN)) {
+        Serial.println("[I2C] ❌ 共享I2C初始化失败");
+    } else {
+        Serial.println("[I2C] ✅ 共享I2C初始化成功");
+    }
+    
+    // 添加延时，避免电流峰值
+    delay(100);
 
 #ifdef ENABLE_IMU
     Serial.println("[IMU] 开始初始化IMU系统...");
-    Serial.printf("[IMU] 引脚配置 - SDA:%d, SCL:%d, INT:%d\n", IMU_SDA_PIN, IMU_SCL_PIN, IMU_INT_PIN);
+    Serial.printf("[IMU] 引脚配置 - INT:%d\n", IMU_INT_PIN);
 
     try
     {
@@ -301,6 +311,26 @@ void Device::begin()
         device_state.imuReady = false;
         Serial.println("[IMU] ❌ IMU系统初始化异常");
     }
+    
+    // 添加延时，避免电流峰值
+    delay(100);
+#endif
+
+#ifdef ENABLE_COMPASS
+    Serial.println("[Compass] 开始初始化指南针系统...");
+    try
+    {
+        compass.begin();
+        Serial.println("[Compass] ✅ 指南针系统初始化成功");
+    }
+    catch (...)
+    {
+        Serial.println("[Compass] ❌ 指南针系统初始化异常");
+    }
+    
+    // 添加延时，避免电流峰值
+    delay(100);
+#endif
 
     // 如果是从深度睡眠唤醒，检查唤醒原因
     if (isWakeFromDeepSleep)
@@ -317,7 +347,8 @@ void Device::begin()
             break;
         }
     }
-#else
+
+#ifndef ENABLE_IMU
     device_state.imuReady = false;
     Serial.println("[IMU] IMU功能未启用 (ENABLE_IMU未定义)");
 #endif

@@ -5,6 +5,7 @@
 #include <QMC5883LCompass.h>
 #include "config.h"
 #include "device.h"
+#include "utils/I2CManager.h"
 
 // 方向枚举
 enum CompassDirection {
@@ -51,11 +52,9 @@ float normalizeHeading(float heading);
 class Compass {
 public:
     /**
-     * @brief 构造函数，指定I2C引脚
-     * @param sda I2C SDA引脚
-     * @param scl I2C SCL引脚
+     * @brief 构造函数
      */
-    Compass(int sda, int scl);
+    Compass();
 
     /**
      * @brief 初始化罗盘
@@ -157,10 +156,7 @@ public:
     void reset();
 
 private:
-    int _sda;
-    int _scl;
     bool _initialized;
-    TwoWire& _wire;              // 使用 Wire1 作为 I2C 总线（与IMU共享）
     float _declination;          // 磁偏角校正值
     QMC5883LCompass qmc;         // QMC5883L传感器对象
     unsigned long _lastReadTime; // 上次读取时间
