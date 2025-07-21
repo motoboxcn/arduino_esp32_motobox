@@ -258,25 +258,16 @@ void setup()
 
   PreferencesUtils::init();
 
-  Serial.println("step 1");
   bootCount++;
   Serial.println("[系统] 启动次数: " + String(bootCount));
 
-  Serial.println("step 2");
   powerManager.begin();
 
-  Serial.println("step 3");
   powerManager.printWakeupReason();
 
-  Serial.println("step 4");
   powerManager.checkWakeupCause();
-
-  Serial.println("step 5");
-  device.begin();
-
   //================ SD卡初始化开始 ================
 #ifdef ENABLE_SDCARD
-  Serial.println("step 6");
   if (sdManager.begin())
   {
     Serial.println("[SD] SD卡初始化成功");
@@ -292,11 +283,11 @@ void setup()
     Serial.println("[SD] 设备信息已保存到SD卡");
 
     // 初始化SD卡OTA升级功能
-    Serial.println("step 6.1 - 初始化SD卡OTA升级");
+    Serial.println("[SD] 初始化SD卡OTA升级");
     sdCardOTA.begin();
     
     // 检查并执行SD卡升级（如果需要）
-    Serial.println("step 6.2 - 检查SD卡升级");
+    Serial.println("[SD] 检查SD卡升级");
     if (sdCardOTA.checkAndUpgrade()) {
         Serial.println("[OTA] SD卡升级成功，设备将重启");
         // 如果升级成功，设备会自动重启，不会执行到这里
@@ -328,6 +319,7 @@ void setup()
 #endif
   //================ SD卡初始化结束 ================
 
+  device.begin();
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
   xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);

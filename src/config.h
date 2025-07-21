@@ -24,7 +24,6 @@
 // 其他基础功能
 #define ENABLE_COMPASS
 #define ENABLE_IMU
-#define ENABLE_AUDIO
 #define ENABLE_LED
 // #define ENABLE_TFT  // 暂时禁用TFT
 #define ENABLE_BLE
