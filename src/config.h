@@ -37,10 +37,6 @@
 #define IMU_CHAR_UUID       "BEB5483F-36E1-4688-B7F5-EA07361B26A8"
 
 
-// 音频配置
-#define AUDIO_BOOT_SUCCESS_ENABLED    true
-#define AUDIO_GPS_FIXED_ENABLED       true
-
 
 // 版本信息
 #ifndef FIRMWARE_VERSION

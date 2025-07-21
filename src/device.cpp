@@ -263,15 +263,7 @@ void Device::begin()
     {
         device_state.audioReady = true;
         Serial.println("[音频] ✅ 音频系统初始化成功!");
-
-        // 播放开机成功音（只播放一次）
-        static bool bootSoundPlayed = false;
-        if (AUDIO_BOOT_SUCCESS_ENABLED && !bootSoundPlayed)
-        {
-            Serial.println("[音频] 播放开机成功音...");
-            audioManager.playBootSuccessSound();
-            bootSoundPlayed = true;
-        }
+        audioManager.playWelcomeVoice();
     }
     else
     {
@@ -558,7 +550,7 @@ void Device::initializeGSM()
     Serial.println("[GSM] 初始化Air780EG模块...");
     Serial.printf("[GSM] 引脚配置 - RX:%d, TX:%d, EN:%d\n", GSM_RX_PIN, GSM_TX_PIN, GSM_EN);
     // 设置日志级别 (可选)
-    Air780EG::setLogLevel(AIR780EG_LOG_VERBOSE);
+    Air780EG::setLogLevel(AIR780EG_LOG_INFO);
     while (!air780eg.begin(&Serial1, 115200, GSM_RX_PIN, GSM_TX_PIN, GSM_EN))
     {
         Serial.println("[GSM] ❌ Air780EG基础初始化失败");
