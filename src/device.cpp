@@ -116,7 +116,7 @@ String getLocationJSON()
     {
         // 每2分钟一次定位，因为这个定位比较耗时
         static unsigned long lastUpdateTime = 0;
-        if (millis() - lastUpdateTime > 60000*2)
+        if (millis() - lastUpdateTime > 60000 * 2)
         {
             lastUpdateTime = millis();
             if (!air780eg.getGNSS().updateWIFILocation())
@@ -254,6 +254,39 @@ void Device::begin()
                       getVersionInfo().firmware_version, getVersionInfo().build_time);
     }
 
+#ifdef ENABLE_AUDIO
+    // 音频系统初始化
+    Serial.println("[音频] 开始初始化音频系统...");
+    Serial.printf("[音频] 引脚配置 - WS:%d, BCLK:%d, DATA:%d\n", IIS_S_WS_PIN, IIS_S_BCLK_PIN, IIS_S_DATA_PIN);
+
+    if (audioManager.begin())
+    {
+        device_state.audioReady = true;
+        Serial.println("[音频] ✅ 音频系统初始化成功!");
+
+        // 播放开机成功音（只播放一次）
+        static bool bootSoundPlayed = false;
+        if (AUDIO_BOOT_SUCCESS_ENABLED && !bootSoundPlayed)
+        {
+            Serial.println("[音频] 播放开机成功音...");
+            audioManager.playBootSuccessSound();
+            bootSoundPlayed = true;
+        }
+    }
+    else
+    {
+        device_state.audioReady = false;
+        Serial.println("[音频] ❌ 音频系统初始化失败!");
+        Serial.println("[音频] 请检查:");
+        Serial.println("[音频] 1. 音频引脚是否正确定义");
+        Serial.println("[音频] 2. I2S硬件是否正常连接");
+        Serial.println("[音频] 3. 引脚是否与其他功能冲突");
+    }
+#else
+    device_state.audioReady = false;
+    Serial.println("[音频] 音频功能未启用 (ENABLE_AUDIO未定义)");
+#endif
+
 #ifdef BAT_PIN
     // bat.setDebug(true);
     bat.begin();
@@ -285,14 +318,17 @@ void Device::begin()
     // 统一初始化I2C设备（IMU和Compass共用同一个I2C总线）
     Serial.println("[I2C] 开始初始化I2C设备...");
     Serial.printf("[I2C] 引脚配置 - SDA:%d, SCL:%d\n", IIC_SDA_PIN, IIC_SCL_PIN);
-    
+
     // 首先初始化共享I2C管理器
-    if (!initSharedI2C(IIC_SDA_PIN, IIC_SCL_PIN)) {
+    if (!initSharedI2C(IIC_SDA_PIN, IIC_SCL_PIN))
+    {
         Serial.println("[I2C] ❌ 共享I2C初始化失败");
-    } else {
+    }
+    else
+    {
         Serial.println("[I2C] ✅ 共享I2C初始化成功");
     }
-    
+
     // 添加延时，避免电流峰值
     delay(100);
 
@@ -311,7 +347,7 @@ void Device::begin()
         device_state.imuReady = false;
         Serial.println("[IMU] ❌ IMU系统初始化异常");
     }
-    
+
     // 添加延时，避免电流峰值
     delay(100);
 #endif
@@ -327,7 +363,7 @@ void Device::begin()
     {
         Serial.println("[Compass] ❌ 指南针系统初始化异常");
     }
-    
+
     // 添加延时，避免电流峰值
     delay(100);
 #endif
@@ -366,39 +402,6 @@ void Device::begin()
     initializeGSM();
 #endif
     Serial.println("GPS初始化已延迟到任务中!");
-
-#ifdef ENABLE_AUDIO
-    // 音频系统初始化
-    Serial.println("[音频] 开始初始化音频系统...");
-    Serial.printf("[音频] 引脚配置 - WS:%d, BCLK:%d, DATA:%d\n", IIS_S_WS_PIN, IIS_S_BCLK_PIN, IIS_S_DATA_PIN);
-
-    if (audioManager.begin())
-    {
-        device_state.audioReady = true;
-        Serial.println("[音频] ✅ 音频系统初始化成功!");
-
-        // 播放开机成功音（只播放一次）
-        static bool bootSoundPlayed = false;
-        if (AUDIO_BOOT_SUCCESS_ENABLED && !bootSoundPlayed)
-        {
-            Serial.println("[音频] 播放开机成功音...");
-            audioManager.playBootSuccessSound();
-            bootSoundPlayed = true;
-        }
-    }
-    else
-    {
-        device_state.audioReady = false;
-        Serial.println("[音频] ❌ 音频系统初始化失败!");
-        Serial.println("[音频] 请检查:");
-        Serial.println("[音频] 1. 音频引脚是否正确定义");
-        Serial.println("[音频] 2. I2S硬件是否正常连接");
-        Serial.println("[音频] 3. 引脚是否与其他功能冲突");
-    }
-#else
-    device_state.audioReady = false;
-    Serial.println("[音频] 音频功能未启用 (ENABLE_AUDIO未定义)");
-#endif
 }
 
 // 通知特定状态变化
@@ -434,9 +437,10 @@ void update_device_state()
         if (device_state.battery_percentage <= 20 &&
             last_state.battery_percentage > 20)
         {
-            if (device_state.audioReady){
-            Serial.println("[音频] 播放低电量警告音");
-            audioManager.playLowBatterySound();
+            if (device_state.audioReady)
+            {
+                Serial.println("[音频] 播放低电量警告音");
+                audioManager.playLowBatterySound();
             }
         }
 #endif
@@ -554,7 +558,7 @@ void Device::initializeGSM()
     Serial.println("[GSM] 初始化Air780EG模块...");
     Serial.printf("[GSM] 引脚配置 - RX:%d, TX:%d, EN:%d\n", GSM_RX_PIN, GSM_TX_PIN, GSM_EN);
     // 设置日志级别 (可选)
-    Air780EG::setLogLevel(AIR780EG_LOG_INFO);
+    Air780EG::setLogLevel(AIR780EG_LOG_VERBOSE);
     while (!air780eg.begin(&Serial1, 115200, GSM_RX_PIN, GSM_TX_PIN, GSM_EN))
     {
         Serial.println("[GSM] ❌ Air780EG基础初始化失败");

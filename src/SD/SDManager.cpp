@@ -1,5 +1,7 @@
 #include "SDManager.h"
 
+#ifdef ENABLE_SDCARD
+
 SDManager::SDManager() : _initialized(false) {}
 
 SDManager::~SDManager() {
@@ -1186,3 +1188,5 @@ String SDManager::formatFileSize(size_t bytes) {
         return String(bytes / (1024.0 * 1024.0), 1) + " MB";
     }
 }
+
+#endif // ENABLE_SDCARD

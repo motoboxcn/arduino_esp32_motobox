@@ -2,6 +2,11 @@
 #define SDMANAGER_H
 
 #include <Arduino.h>
+#include "Air780EG.h"
+#include "Air780EGGNSS.h"
+
+#ifdef ENABLE_SDCARD
+
 #include <SPI.h>
 #include "device.h"
 
@@ -24,8 +29,7 @@
 #define FIRMWARE_VERSION "2.3.0"
 #endif
 
-#include "Air780EG.h"
-#include "Air780EGGNSS.h"
+#endif // ENABLE_SDCARD
 
 class SDManager {
 public:
@@ -83,6 +87,7 @@ public:
      */
     bool isValidWelcomeVoiceFile();
 
+#ifdef ENABLE_SDCARD
 private:
     bool _initialized;
 
@@ -100,6 +105,7 @@ private:
     int getBootCount();
     void debugPrint(const String& message);
     String formatFileSize(size_t bytes);
+#endif // ENABLE_SDCARD
 };
 
 #endif // SDMANAGER_H
