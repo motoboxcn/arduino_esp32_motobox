@@ -40,6 +40,10 @@
 #include "compass/Compass.h"
 #endif
 
+#ifdef ENABLE_FUSION_LOCATION
+#include "location/FusionLocationManager.h"
+#endif
+
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM
 // 直接使用新的Air780EG库
@@ -320,6 +324,20 @@ void setup()
   //================ SD卡初始化结束 ================
 
   device.begin();
+  
+  //================ 融合定位初始化开始 ================
+#ifdef ENABLE_FUSION_LOCATION
+  Serial.println("[融合定位] 初始化融合定位系统...");
+  if (fusionLocationManager.begin(FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG)) {
+    Serial.println("[融合定位] ✅ 融合定位系统初始化成功");
+    fusionLocationManager.setDebug(FUSION_LOCATION_DEBUG_ENABLED);
+    fusionLocationManager.setUpdateInterval(FUSION_LOCATION_UPDATE_INTERVAL);
+  } else {
+    Serial.println("[融合定位] ❌ 融合定位系统初始化失败");
+  }
+#endif
+  //================ 融合定位初始化结束 ================
+  
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
   xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
@@ -341,6 +359,11 @@ void loop()
   static unsigned long lastLoopReport = 0;
   loopCount++;
 
+  // 更新融合定位系统
+#ifdef ENABLE_FUSION_LOCATION
+  fusionLocationManager.loop();
+#endif
+
   if (millis() - lastLoopReport > 10000)
   {
     lastLoopReport = millis();
@@ -359,6 +382,17 @@ void loop()
     }
     // air780eg.getGNSS().printGNSSInfo();
     printCompassData();
+    
+    // 打印融合定位状态
+#ifdef ENABLE_FUSION_LOCATION
+    if (fusionLocationManager.isInitialized()) {
+      Position pos = fusionLocationManager.getFusedPosition();
+      if (pos.valid) {
+        Serial.printf("[融合定位] 位置: %.6f, %.6f | 精度: %.1fm | 航向: %.1f°\n", 
+                     pos.lat, pos.lng, pos.accuracy, pos.heading);
+      }
+    }
+#endif
   }
   imu.printImuData();
   delay(20);
