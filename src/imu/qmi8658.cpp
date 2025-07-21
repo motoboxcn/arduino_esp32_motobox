@@ -374,14 +374,15 @@ void IMU::loop()
     if (motionDetectionEnabled && isMotionDetected())
     {
         static unsigned long lastMotionTime = 0;
-            unsigned long now = millis();
-            if (now - lastMotionTime > MOTION_DETECTION_DEBOUNCE_MS)
-            {
-                Serial.printf("[IMU] 检测到运动! 中断引脚: GPIO%d\n", motionIntPin);
-                lastMotionTime = now;
-            }
+        unsigned long now = millis();
+        if (now - lastMotionTime > MOTION_DETECTION_DEBOUNCE_MS)
+        {
+            Serial.printf("[IMU] 检测到运动! 中断引脚: GPIO%d\n", motionIntPin);
+            lastMotionTime = now;
         }
     }
+    
+    // 调试输出
     if (millis() - _lastDebugPrintTime > 500)
     {
         _lastDebugPrintTime = millis();
