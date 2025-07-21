@@ -14,7 +14,7 @@ void IRAM_ATTR IMU::motionISR()
 
 IMU::IMU(int motionIntPin)
     : motionIntPin(motionIntPin),
-    _debug(false),
+    _debug(true),
     _lastDebugPrintTime(0)
 {
     this->motionIntPin = motionIntPin;
@@ -90,9 +90,22 @@ void IMU::begin()
     Serial.print("[IMU] 设备ID: 0x");
     Serial.println(qmi.getChipID(), HEX);
 
-    // 推荐检测采样率
+    // 配置加速度计 - 500Hz采样率
     qmi.configAccelerometer(SensorQMI8658::ACC_RANGE_4G, SensorQMI8658::ACC_ODR_500Hz);
     qmi.enableAccelerometer();
+    Serial.println("[IMU] 加速度计已启用 - 500Hz");
+
+    // 配置陀螺仪 - 896.8Hz采样率（提高数据更新频率）
+    qmi.configGyroscope(
+        SensorQMI8658::GYR_RANGE_1024DPS,  // ±1024°/s量程
+        SensorQMI8658::GYR_ODR_896_8Hz,    // 896.8Hz采样率
+        SensorQMI8658::LPF_MODE_3          // 低通滤波器模式3
+    );
+    qmi.enableGyroscope();
+    Serial.println("[IMU] 陀螺仪已启用 - 896.8Hz");
+    
+    // 根据官方文档：同时启用加速度计和陀螺仪时，输出频率基于陀螺仪频率
+    Serial.println("[IMU] 数据输出频率将基于陀螺仪频率 (896.8Hz)");
 
     // 配置三轴任意运动检测
     uint8_t modeCtrl = SensorQMI8658::ANY_MOTION_EN_X |
@@ -276,12 +289,12 @@ void IMU::setGyroEnabled(bool enabled)
     if (enabled)
     {
         qmi.configGyroscope(
-            (SensorQMI8658::GyroRange)6, // GYR_RANGE_1024DPS = 6
-            (SensorQMI8658::GyroODR)3,   // GYR_ODR_896_8Hz = 3
-            (SensorQMI8658::LpfMode)3    // LPF_MODE_3 = 3
+            SensorQMI8658::GYR_RANGE_1024DPS,  // ±1024°/s量程
+            SensorQMI8658::GYR_ODR_896_8Hz,    // 896.8Hz采样率
+            SensorQMI8658::LPF_MODE_3          // 低通滤波器模式3
         );
         qmi.enableGyroscope();
-        Serial.println("[IMU] 陀螺仪已启用");
+        Serial.println("[IMU] 陀螺仪已启用 - 896.8Hz");
     }
     else
     {
@@ -367,7 +380,10 @@ bool IMU::detectMotion()
  */
 void IMU::printImuData()
 {
-    Serial.println("imu_data: " + String(imu_data.roll) + ", " + String(imu_data.pitch) + ", " + String(imu_data.yaw) + ", " + String(imu_data.temperature));
+    Serial.printf("imu_data: roll=%.2f, pitch=%.2f, yaw=%.2f, temp=%.1f°C | accel=(%.2f,%.2f,%.2f)g | gyro=(%.1f,%.1f,%.1f)°/s\n",
+        imu_data.roll, imu_data.pitch, imu_data.yaw, imu_data.temperature,
+        imu_data.accel_x, imu_data.accel_y, imu_data.accel_z,
+        imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
 }
 
 // 生成精简版IMU数据JSON
