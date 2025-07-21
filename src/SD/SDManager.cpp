@@ -105,12 +105,17 @@ bool SDManager::createDirectoryStructure() {
 
     // 创建基本目录结构
     const char* directories[] = {
-        "/data",
-        "/data/gps",
-        "/config"
+        SD_DATA_DIR,
+        SD_GPS_DATA_DIR,
+        SD_SENSOR_DATA_DIR,
+        SD_SYSTEM_DATA_DIR,
+        SD_CONFIG_DIR,
+        SD_UPDATES_DIR,
+        SD_VOICE_DIR,
+        SD_LOGS_DIR
     };
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 8; i++) {
         if (!createDirectory(directories[i])) {
             debugPrint("创建目录失败: " + String(directories[i]));
             return false;
@@ -169,13 +174,7 @@ bool SDManager::saveDeviceInfo() {
         return false;
     }
 
-    // 确保config目录存在
-    if (!createDirectory("/config")) {
-        debugPrint("❌ 无法创建config目录");
-        return false;
-    }
-
-    const char* filename = "/config/device.json";
+    const char* filename = SD_DEVICE_INFO_FILE;
     
     File file = SD_MMC.open(filename, FILE_WRITE);
 
@@ -255,7 +254,7 @@ bool SDManager::recordGPSData(gnss_data_t &gnss_data) {
         
         // 尝试重新创建目录
         debugPrint("🔧 尝试重新创建GPS目录...");
-        if (createDirectory("/data") && createDirectory("/data/gps")) {
+        if (createDirectory(SD_DATA_DIR) && createDirectory(SD_GPS_DATA_DIR)) {
             debugPrint("✅ GPS目录重新创建成功，请重试");
         } else {
             debugPrint("❌ GPS目录重新创建失败");
@@ -354,7 +353,7 @@ String SDManager::generateGPSSessionFilename() {
         bootStr = "0" + bootStr;
     }
     
-    return "/data/gps/gps_" + dateStr + "_" + timeStr + "_boot" + bootStr + ".geojson";
+    return String(SD_GPS_DATA_DIR) + "/gps_" + dateStr + "_" + timeStr + "_boot" + bootStr + ".geojson";
 }
 
 int SDManager::getBootCount() {
@@ -426,14 +425,14 @@ bool SDManager::ensureGPSDirectoryExists() {
         debugPrint("✅ /data 目录创建成功");
     }
 
-    // 检查并创建 /data/gps 目录
-    if (!directoryExists("/data/gps")) {
-        debugPrint("🔧 创建 /data/gps 目录...");
-        if (!createDirectory("/data/gps")) {
-            debugPrint("❌ 创建 /data/gps 目录失败");
+    // 检查并创建 GPS 数据目录
+    if (!directoryExists(SD_GPS_DATA_DIR)) {
+        debugPrint("🔧 创建 GPS 数据目录...");
+        if (!createDirectory(SD_GPS_DATA_DIR)) {
+            debugPrint("❌ 创建 GPS 数据目录失败");
             return false;
         }
-        debugPrint("✅ /data/gps 目录创建成功");
+        debugPrint("✅ GPS 数据目录创建成功");
     }
 
     return true;
@@ -466,346 +465,146 @@ void SDManager::debugPrint(const String& message) {
 
 // 串口命令处理
 bool SDManager::handleSerialCommand(const String& command) {
-    if (command == "sd.info") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            Serial.println("可能的原因：");
-            Serial.println("  1. 未插入SD卡");
-            Serial.println("  2. SD卡损坏或格式不支持");
-            Serial.println("  3. 硬件连接错误");
-            return false;
-        }
-        
-        Serial.println("=== SD卡信息 ===");
-        Serial.println("设备ID: " + device.get_device_id());
-        
-        uint64_t totalMB = getTotalSpaceMB();
-        uint64_t freeMB = getFreeSpaceMB();
-        
-        if (totalMB > 0) {
-            Serial.println("总容量: " + String((unsigned long)totalMB) + " MB");
-            Serial.println("剩余空间: " + String((unsigned long)freeMB) + " MB");
-            Serial.println("使用率: " + String((unsigned long)((totalMB - freeMB) * 100 / totalMB)) + "%");
-        } else {
-            Serial.println("⚠️ 无法获取容量信息，SD卡可能已移除");
-        }
-        
-        Serial.println("初始化状态: " + String(_initialized ? "已初始化" : "未初始化"));
-        return true;
-    }
-    else if (command == "sd.test") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化，无法进行测试");
-            Serial.println("请先插入SD卡并重启设备");
-            return false;
-        }
-        
-        // 测试GPS数据记录
-        Serial.println("正在测试GPS数据记录...");
-        Serial.println("测试数据: 北京天安门广场坐标");
-        Serial.println("当前会话文件: " + generateGPSSessionFilename());
-        
-        bool result = recordGPSData(air780eg.getGNSS().gnss_data);
-        
-        if (result) {
-            Serial.println("✅ GPS数据记录测试成功");
-            Serial.println("数据已保存到当前会话文件");
-        } else {
-            Serial.println("❌ GPS数据记录测试失败");
-            Serial.println("请检查SD卡状态");
-        }
-        
-        return result;
-    }
-    else if (command == "sd.session") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        Serial.println("=== GPS会话信息 ===");
-        Serial.println("当前会话文件: " + generateGPSSessionFilename());
-        Serial.println("启动次数: " + String(getBootCount()));
-        Serial.println("运行时间: " + String(millis() / 1000) + " 秒");
-        Serial.println("设备ID: " + device.get_device_id());
-        return true;
-    }
-    else if (command == "sd.finish") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        Serial.println("正在结束当前GPS会话...");
-        bool result = finishGPSSession();
-        
-        if (result) {
-            Serial.println("✅ GPS会话已正确结束");
-        } else {
-            Serial.println("❌ GPS会话结束失败");
-        }
-        
-        return result;
-    }
-    else if (command == "sd.dirs") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        Serial.println("=== 目录状态检查 ===");
-        Serial.println("/data 目录: " + String(directoryExists("/data") ? "存在" : "不存在"));
-        Serial.println("/data/gps 目录: " + String(directoryExists("/data/gps") ? "存在" : "不存在"));
-        Serial.println("/config 目录: " + String(directoryExists("/config") ? "存在" : "不存在"));
-        
-        Serial.println("");
-        Serial.println("正在确保GPS目录存在...");
-        bool result = ensureGPSDirectoryExists();
-        
-        if (result) {
-            Serial.println("✅ GPS目录检查/创建成功");
-        } else {
-            Serial.println("❌ GPS目录检查/创建失败");
-        }
-        
-        return result;
-    }
-    else if (command == "yes_format") {
-        Serial.println("⚠️ 简化版SD管理器暂不支持格式化功能");
-        Serial.println("如需格式化，请使用电脑格式化为FAT32格式");
+    if (!_initialized && command != "sd.init") {
+        Serial.println("❌ SD卡未初始化，请先使用 'sd.init' 初始化");
         return false;
     }
+
+    // 基本信息查询
+    if (command == "sd.info") {
+        Serial.println("=== SD卡详细信息 ===");
+        Serial.println("初始化状态: " + String(_initialized ? "✅ 已初始化" : "❌ 未初始化"));
+        if (_initialized) {
+            Serial.println("总容量: " + String((unsigned long)getTotalSpaceMB()) + " MB");
+            Serial.println("可用空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
+            Serial.println("使用率: " + String(100.0 * (getTotalSpaceMB() - getFreeSpaceMB()) / getTotalSpaceMB(), 1) + "%");
+        }
+        return true;
+    }
+    
+    // 状态检查
     else if (command == "sd.status") {
         Serial.println("=== SD卡状态检查 ===");
-        
-        if (!_initialized) {
-            Serial.println("❌ SD卡状态: 未初始化");
-            Serial.println("建议操作:");
-            Serial.println("  1. 检查SD卡是否正确插入");
-            Serial.println("  2. 确认SD卡格式为FAT32");
-            Serial.println("  3. 重启设备重新初始化");
-            return false;
+        Serial.println("SD卡状态: " + String(_initialized ? "✅ 正常" : "❌ 异常"));
+        if (_initialized) {
+            Serial.println("可用空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
+            
+            // 检查关键目录
+            Serial.println("--- 目录状态 ---");
+            Serial.println(String(SD_DATA_DIR) + ": " + String(directoryExists(SD_DATA_DIR) ? "✅" : "❌"));
+            Serial.println(String(SD_GPS_DATA_DIR) + ": " + String(directoryExists(SD_GPS_DATA_DIR) ? "✅" : "❌"));
+            Serial.println(String(SD_CONFIG_DIR) + ": " + String(directoryExists(SD_CONFIG_DIR) ? "✅" : "❌"));
+            Serial.println(String(SD_UPDATES_DIR) + ": " + String(directoryExists(SD_UPDATES_DIR) ? "✅" : "❌"));
         }
-        
-        Serial.println("✅ SD卡状态: 已初始化");
-        
-        // 测试基本读写功能
-        Serial.println("正在测试基本读写功能...");
-        
-        uint64_t freeMB = getFreeSpaceMB();
-        if (freeMB == 0) {
-            Serial.println("⚠️ 警告: 无法获取剩余空间，SD卡可能已移除");
-            return false;
-        }
-        
-        Serial.println("✅ 读写功能正常");
-        Serial.println("剩余空间: " + String((unsigned long)freeMB) + " MB");
-        
         return true;
     }
-    else if (command == "sd.ls" || command.startsWith("sd.ls ")) {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        String path = "/";
-        if (command.length() > 5) {
-            path = command.substring(6);
-            path.trim();
-            if (!path.startsWith("/")) {
-                path = "/" + path;
-            }
-        }
-        
-        Serial.println("=== 目录列表: " + path + " ===");
-        return listDirectory(path);
-    }
+    
+    // 目录结构查看
     else if (command == "sd.tree") {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        Serial.println("=== SD卡目录树 ===");
-        return listDirectoryTree("/", 0, 3); // 最大深度3层
-    }
-    else if (command.startsWith("sd.mkdir ")) {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        String path = command.substring(9);
-        path.trim();
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        
-        Serial.println("正在创建目录: " + path);
-        bool result = createDirectory(path);
-        
-        if (result) {
-            Serial.println("✅ 目录创建成功: " + path);
-        } else {
-            Serial.println("❌ 目录创建失败: " + path);
-        }
-        
-        return result;
-    }
-    else if (command.startsWith("sd.rm ")) {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        String path = command.substring(6);
-        path.trim();
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        
-        Serial.println("⚠️ 正在删除: " + path);
-        Serial.println("注意: 此操作不可恢复！");
-        
-        bool result = deleteFile(path);
-        
-        if (result) {
-            Serial.println("✅ 删除成功: " + path);
-        } else {
-            Serial.println("❌ 删除失败: " + path);
-        }
-        
-        return result;
-    }
-    else if (command.startsWith("sd.cat ")) {
-        if (!_initialized) {
-            Serial.println("❌ SD卡未初始化");
-            return false;
-        }
-        
-        String path = command.substring(7);
-        path.trim();
-        if (!path.startsWith("/")) {
-            path = "/" + path;
-        }
-        
-        Serial.println("=== 文件内容: " + path + " ===");
-        return displayFileContent(path);
-    }
-    else if (command == "sd.fmt") {
-        Serial.println("⚠️ 格式化SD卡功能");
-        Serial.println("警告: 此操作将删除SD卡上的所有数据！");
-        Serial.println("ESP32-S3不支持直接格式化SD卡");
-        Serial.println("建议操作:");
-        Serial.println("  1. 将SD卡取出");
-        Serial.println("  2. 使用电脑格式化为FAT32格式");
-        Serial.println("  3. 重新插入SD卡");
-        Serial.println("  4. 重启设备");
-        return true; // 命令执行成功，只是不支持格式化功能
-    }
-    else if (command == "sd.help") {
-        Serial.println("=== SD卡命令帮助 ===");
-        Serial.println("基本命令:");
-        Serial.println("  sd.info      - 显示SD卡详细信息");
-        Serial.println("  sd.status    - 检查SD卡状态");
-        Serial.println("  sd.init      - 重新初始化SD卡并创建目录结构");
-        Serial.println("  sd.help      - 显示此帮助信息");
-        Serial.println("");
-        Serial.println("文件操作:");
-        Serial.println("  sd.ls [path] - 列出目录内容 (默认根目录)");
-        Serial.println("  sd.tree      - 显示目录树结构");
-        Serial.println("  sd.cat <file>- 显示文件内容");
-        Serial.println("  sd.mkdir <dir> - 创建目录");
-        Serial.println("  sd.rm <path> - 删除文件或目录");
-        Serial.println("");
-        Serial.println("GPS相关:");
-        Serial.println("  sd.test      - 测试GPS数据记录");
-        Serial.println("  sd.session   - 显示当前GPS会话信息");
-        Serial.println("  sd.finish    - 结束当前GPS会话");
-        Serial.println("  sd.dirs      - 检查和创建目录结构");
-        Serial.println("");
-        Serial.println("系统操作:");
-        Serial.println("  sd.fmt       - 格式化说明 (需要电脑操作)");
-        Serial.println("");
-        Serial.println("示例:");
-        Serial.println("  sd.ls /data");
-        Serial.println("  sd.mkdir /logs/test");
-        Serial.println("  sd.cat /config/device.json");
-        Serial.println("  sd.rm /temp/old_file.txt");
+        Serial.println("=== SD卡目录结构 ===");
+        listDirectoryTree("/", 0, 3); // 最多显示3层
         return true;
     }
+    
+    // 显示目录结构定义
+    else if (command == "sd.structure") {
+        printDirectoryStructure();
+        return true;
+    }
+    
+    // 格式化说明（不实际格式化，只显示说明）
+    else if (command == "sd.fmt") {
+        Serial.println("=== SD卡格式化说明 ===");
+        Serial.println("⚠️ 注意：ESP32不支持直接格式化SD卡");
+        Serial.println("如需格式化SD卡，请：");
+        Serial.println("1. 将SD卡取出");
+        Serial.println("2. 使用电脑格式化为FAT32格式");
+        Serial.println("3. 重新插入SD卡");
+        Serial.println("4. 使用 'sd.init' 重新初始化");
+        return true;
+    }
+    
+    // 重新初始化
     else if (command == "sd.init") {
         Serial.println("=== 重新初始化SD卡 ===");
         
-        if (!_initialized) {
-            Serial.println("❌ SD卡当前未初始化，尝试重新初始化...");
-            if (!begin()) {
-                Serial.println("❌ SD卡初始化失败");
-                return false;
-            }
+        if (_initialized) {
+            end(); // 先结束当前连接
         }
         
-        Serial.println("✅ SD卡已初始化");
-        
-        // 创建基本目录结构
-        Serial.println("🔧 创建基本目录结构...");
-        
-        bool success = true;
-        
-        // 创建基本目录
-        if (!createDirectory("/data")) {
-            Serial.println("❌ 创建 /data 目录失败");
-            success = false;
+        if (begin()) {
+            Serial.println("✅ SD卡初始化成功");
+            Serial.println("总容量: " + String((unsigned long)getTotalSpaceMB()) + " MB");
+            Serial.println("可用空间: " + String((unsigned long)getFreeSpaceMB()) + " MB");
         } else {
-            Serial.println("✅ /data 目录创建成功");
+            Serial.println("❌ SD卡初始化失败");
+            Serial.println("请检查：");
+            Serial.println("1. SD卡是否正确插入");
+            Serial.println("2. SD卡是否损坏");
+            Serial.println("3. SD卡格式是否为FAT32");
         }
-        
-        if (!createDirectory("/data/gps")) {
-            Serial.println("❌ 创建 /data/gps 目录失败");
-            success = false;
-        } else {
-            Serial.println("✅ /data/gps 目录创建成功");
-        }
-        
-        if (!createDirectory("/config")) {
-            Serial.println("❌ 创建 /config 目录失败");
-            success = false;
-        } else {
-            Serial.println("✅ /config 目录创建成功");
-        }
-        
-        if (!createDirectory("/logs")) {
-            Serial.println("❌ 创建 /logs 目录失败");
-            success = false;
-        } else {
-            Serial.println("✅ /logs 目录创建成功");
-        }
-        
-        // 创建测试文件
-        Serial.println("📝 创建测试文件...");
-        String testContent = "{\n  \"device_id\": \"" + device.get_device_id() + "\",\n  \"firmware_version\": \"" + String(FIRMWARE_VERSION) + "\",\n  \"created_at\": \"" + getCurrentTimestamp() + "\"\n}";
-        
-        if (writeFile("/config/device.json", testContent)) {
-            Serial.println("✅ 测试文件 /config/device.json 创建成功");
-        } else {
-            Serial.println("❌ 测试文件创建失败");
-            success = false;
-        }
-        
-        if (success) {
-            Serial.println("🎉 SD卡初始化和目录结构创建完成！");
-            Serial.println("现在可以使用 sd.ls 和 sd.tree 查看结果");
-        } else {
-            Serial.println("⚠️ 部分操作失败，请检查SD卡状态");
-        }
-        
-        return success;
+        return true;
+    }
+    
+    // 帮助信息
+    else if (command == "sd.help") {
+        Serial.println("=== SD卡简化命令 ===");
+        Serial.println("sd.info      - 显示SD卡详细信息");
+        Serial.println("sd.status    - 检查SD卡和目录状态");
+        Serial.println("sd.tree      - 显示目录树结构");
+        Serial.println("sd.structure - 显示目录结构定义");
+        Serial.println("sd.fmt       - 显示格式化说明");
+        Serial.println("sd.init      - 重新初始化SD卡");
+        Serial.println("sd.help      - 显示此帮助信息");
+        Serial.println("");
+        Serial.println("💡 更多SD卡操作请使用主命令系统的 'help' 查看");
+        return true;
     }
     
     Serial.println("❌ 未知SD卡命令: " + command);
-    Serial.println("输入 'sd.help' 查看所有可用命令");
+    Serial.println("输入 'sd.help' 查看可用命令");
     return false;
+}
+
+// 显示SD卡目录结构信息
+void SDManager::printDirectoryStructure() {
+    if (!_initialized) {
+        Serial.println("❌ SD卡未初始化");
+        return;
+    }
+    
+    Serial.println("========== SD卡目录结构 ==========");
+    Serial.println("📁 根目录文件:");
+    Serial.println("  📄 " + String(SD_DEVICE_INFO_FILE) + " - 设备信息");
+    
+    Serial.println("📁 主要目录:");
+    Serial.println("  📂 " + String(SD_DATA_DIR) + " - 数据存储");
+    Serial.println("  📂 " + String(SD_CONFIG_DIR) + " - 配置文件");
+    Serial.println("  📂 " + String(SD_UPDATES_DIR) + " - 升级包");
+    Serial.println("  📂 " + String(SD_VOICE_DIR) + " - 语音文件");
+    Serial.println("  📂 " + String(SD_LOGS_DIR) + " - 日志文件");
+    
+    Serial.println("📁 数据子目录:");
+    Serial.println("  📂 " + String(SD_GPS_DATA_DIR) + " - GPS数据");
+    Serial.println("  📂 " + String(SD_SENSOR_DATA_DIR) + " - 传感器数据");
+    Serial.println("  📂 " + String(SD_SYSTEM_DATA_DIR) + " - 系统数据");
+    
+    Serial.println("📁 配置文件:");
+    Serial.println("  📄 " + String(SD_WIFI_CONFIG_FILE) + " - WiFi配置");
+    Serial.println("  📄 " + String(SD_MQTT_CONFIG_FILE) + " - MQTT配置");
+    Serial.println("  📄 " + String(SD_DEVICE_CONFIG_FILE) + " - 设备配置");
+    
+    Serial.println("📁 特殊文件:");
+    Serial.println("  📄 " + String(SD_WELCOME_VOICE_FILE) + " - 欢迎语音");
+    Serial.println("  📄 " + String(SD_FIRMWARE_FILE) + " - 固件升级包");
+    Serial.println("  📄 " + String(SD_UPDATE_INFO_FILE) + " - 升级信息");
+    
+    Serial.println("📁 日志文件:");
+    Serial.println("  📄 " + String(SD_SYSTEM_LOG_FILE) + " - 系统日志");
+    Serial.println("  📄 " + String(SD_ERROR_LOG_FILE) + " - 错误日志");
+    Serial.println("  📄 " + String(SD_GPS_LOG_FILE) + " - GPS日志");
+    
+    Serial.println("================================");
 }
 
 // ========== 文件操作方法实现 ==========
@@ -1187,6 +986,47 @@ String SDManager::formatFileSize(size_t bytes) {
     } else {
         return String(bytes / (1024.0 * 1024.0), 1) + " MB";
     }
+}
+
+// ========== 语音文件支持函数实现 ==========
+bool SDManager::hasCustomWelcomeVoice() {
+    if (!_initialized) {
+        return false;
+    }
+    return fileExists(SD_WELCOME_VOICE_FILE);
+}
+
+String SDManager::getCustomWelcomeVoicePath() {
+    return String(SD_WELCOME_VOICE_FILE);
+}
+
+bool SDManager::isValidWelcomeVoiceFile() {
+    if (!_initialized || !hasCustomWelcomeVoice()) {
+        return false;
+    }
+    
+    File file = SD_MMC.open(SD_WELCOME_VOICE_FILE, FILE_READ);
+    if (!file) {
+        return false;
+    }
+    
+    // 检查文件大小（至少要有WAV文件头的44字节）
+    if (file.size() < 44) {
+        file.close();
+        return false;
+    }
+    
+    // 读取WAV文件头进行简单验证
+    char header[12];
+    file.read((uint8_t*)header, 12);
+    file.close();
+    
+    // 检查RIFF和WAVE标识
+    if (strncmp(header, "RIFF", 4) == 0 && strncmp(header + 8, "WAVE", 4) == 0) {
+        return true;
+    }
+    
+    return false;
 }
 
 #endif // ENABLE_SDCARD

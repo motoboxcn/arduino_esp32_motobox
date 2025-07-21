@@ -299,18 +299,11 @@ void handleSerialCommand()
             Serial.println("SD卡命令:");
             Serial.println("  sd.info      - 显示SD卡详细信息");
             Serial.println("  sd.status    - 检查SD卡状态");
-            Serial.println("  sd.init      - 重新初始化SD卡并创建目录结构");
-            Serial.println("  sd.help      - 显示SD卡命令帮助");
-            Serial.println("  sd.ls [path] - 列出目录内容");
             Serial.println("  sd.tree      - 显示目录树结构");
-            Serial.println("  sd.cat <file>- 显示文件内容");
-            Serial.println("  sd.mkdir <dir> - 创建目录");
-            Serial.println("  sd.rm <path> - 删除文件或目录");
+            Serial.println("  sd.structure - 显示目录结构定义");
             Serial.println("  sd.fmt       - 格式化说明");
-            Serial.println("  sd.test      - 测试GPS数据记录");
-            Serial.println("  sd.session   - 显示当前GPS会话信息");
-            Serial.println("  sd.finish    - 结束当前GPS会话");
-            Serial.println("  sd.dirs      - 检查和创建目录结构");
+            Serial.println("  sd.init      - 重新初始化SD卡");
+            Serial.println("  sd.help      - 显示SD卡命令帮助");
             Serial.println("");
 #endif
 #ifdef ENABLE_GPS_LOGGER

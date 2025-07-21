@@ -29,6 +29,39 @@
 #define FIRMWARE_VERSION "2.3.0"
 #endif
 
+// ========== SD卡目录结构定义 ==========
+// 根目录文件
+#define SD_DEVICE_INFO_FILE     "/deviceinfo.txt"
+
+// 主要目录
+#define SD_UPDATES_DIR          "/updates"
+#define SD_DATA_DIR             "/data"
+#define SD_VOICE_DIR            "/voice"
+#define SD_LOGS_DIR             "/logs"
+#define SD_CONFIG_DIR           "/config"
+
+// 数据子目录
+#define SD_GPS_DATA_DIR         "/data/gps"
+#define SD_SENSOR_DATA_DIR      "/data/sensor"
+#define SD_SYSTEM_DATA_DIR      "/data/system"
+
+// 配置文件
+#define SD_WIFI_CONFIG_FILE     "/config/wifi.json"
+#define SD_MQTT_CONFIG_FILE     "/config/mqtt.json"
+#define SD_DEVICE_CONFIG_FILE   "/config/device.json"
+
+// 语音文件
+#define SD_WELCOME_VOICE_FILE   "/voice/welcome.wav"
+
+// 日志文件
+#define SD_SYSTEM_LOG_FILE      "/logs/system.log"
+#define SD_ERROR_LOG_FILE       "/logs/error.log"
+#define SD_GPS_LOG_FILE         "/logs/gps.log"
+
+// 升级相关
+#define SD_FIRMWARE_FILE        "/updates/firmware.bin"
+#define SD_UPDATE_INFO_FILE     "/updates/update_info.json"
+
 #endif // ENABLE_SDCARD
 
 class SDManager {
@@ -69,6 +102,9 @@ public:
 
     // 串口命令处理
     bool handleSerialCommand(const String& command);
+
+    // 显示SD卡目录结构信息
+    void printDirectoryStructure();
 
     // ========== 简单语音文件支持 ==========
     /**
