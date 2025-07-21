@@ -62,11 +62,12 @@ const char* getDirectionCN(float heading) {
 
 void printCompassData() {
     if (!compass_data.isValid) {
-        ESP_LOGI(TAG, "数据无效");
+        Serial.printf("[%s] 数据无效\n", TAG);
         return;
     }
     
-    ESP_LOGI(TAG, "航向: %.2f° (%.3f rad), 方向: %s (%s, %s), 磁场: X=%.2f Y=%.2f Z=%.2f", 
+    Serial.printf("[%s] 航向: %.2f° (%.3f rad), 方向: %s (%s, %s), 磁场: X=%.2f Y=%.2f Z=%.2f\n", 
+        TAG,
         compass_data.heading, 
         compass_data.headingRadians,
         compass_data.directionStr, 
@@ -88,14 +89,14 @@ Compass::Compass() {
 }
 
 bool Compass::begin() {
-    ESP_LOGI(TAG, "初始化指南针，磁偏角=%.2f°", _declination);
+    Serial.printf("[%s] 初始化指南针，磁偏角=%.2f°\n", TAG, _declination);
     
     // 使用共享I2C管理器（如果IMU已经初始化过，这里会跳过重复初始化）
     if (!I2CManager::getInstance().isInitialized()) {
         ESP_LOGE(TAG, "共享I2C未初始化，请先初始化I2C管理器!");
         return false;
     }
-    ESP_LOGI(TAG, "使用共享I2C总线");
+    Serial.printf("[%s] 使用共享I2C总线\n", TAG);
 
     delay(100);  // 给一些初始化时间
     
@@ -107,7 +108,7 @@ bool Compass::begin() {
     _initialized = true;
     device_state.compassReady = true;
     
-    ESP_LOGI(TAG, "初始化完成");
+    Serial.printf("[%s] 初始化完成\n", TAG);
     return true;
 }
 
@@ -167,13 +168,13 @@ const char* Compass::getCurrentDirectionCN() {
 
 bool Compass::calibrate() {
     if (!_initialized) {
-        ESP_LOGE(TAG, "罗盘未初始化，无法校准");
+        Serial.printf("[%s] 罗盘未初始化，无法校准\n", TAG);
         return false;
     }
     
-    ESP_LOGI(TAG, "开始校准，请旋转模块...");
+    Serial.printf("[%s] 开始校准，请旋转模块...\n", TAG);
     qmc.calibrate();
-    ESP_LOGI(TAG, "校准完成，请将以下参数写入代码：");
+    Serial.printf("[%s] 校准完成，请将以下参数写入代码：\n", TAG);
     
     Serial.printf("qmc.setCalibrationOffsets(%d, %d, %d);\n",
         qmc.getCalibrationOffset(0), qmc.getCalibrationOffset(1), qmc.getCalibrationOffset(2));
@@ -186,7 +187,7 @@ bool Compass::calibrate() {
 void Compass::setCalibration(int xOffset, int yOffset, int zOffset, float xScale, float yScale, float zScale) {
     qmc.setCalibrationOffsets(xOffset, yOffset, zOffset);
     qmc.setCalibrationScales(xScale, yScale, zScale);
-    ESP_LOGI(TAG, "校准参数已设置");
+    Serial.printf("[%s] 校准参数已设置\n", TAG);
 }
 
 void Compass::getRawData(int16_t &x, int16_t &y, int16_t &z) {
@@ -197,7 +198,7 @@ void Compass::getRawData(int16_t &x, int16_t &y, int16_t &z) {
 
 void Compass::setDeclination(float declination) {
     _declination = declination;
-    ESP_LOGI(TAG, "磁偏角设置为: %.2f°", _declination);
+    Serial.printf("[%s] 磁偏角设置为: %.2f°\n", TAG, _declination);
 }
 
 float Compass::getDeclination() {
@@ -216,7 +217,7 @@ void Compass::reset() {
     _initialized = false;
     device_state.compassReady = false;
     compass_data.isValid = false;
-    ESP_LOGI(TAG, "罗盘已重置");
+    Serial.printf("[%s] 罗盘已重置\n", TAG);
 }
 
 float Compass::calculateHeading(int16_t x, int16_t y) {

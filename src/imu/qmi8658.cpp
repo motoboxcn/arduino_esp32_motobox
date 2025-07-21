@@ -90,12 +90,7 @@ void IMU::begin()
     Serial.print("[IMU] 设备ID: 0x");
     Serial.println(qmi.getChipID(), HEX);
 
-    // 配置加速度计 - 500Hz采样率
-    qmi.configAccelerometer(SensorQMI8658::ACC_RANGE_4G, SensorQMI8658::ACC_ODR_500Hz);
-    qmi.enableAccelerometer();
-    Serial.println("[IMU] 加速度计已启用 - 500Hz");
-
-    // 配置陀螺仪 - 896.8Hz采样率（提高数据更新频率）
+    // 配置陀螺仪 - 896.8Hz采样率（先配置陀螺仪）
     qmi.configGyroscope(
         SensorQMI8658::GYR_RANGE_1024DPS,  // ±1024°/s量程
         SensorQMI8658::GYR_ODR_896_8Hz,    // 896.8Hz采样率
@@ -103,8 +98,14 @@ void IMU::begin()
     );
     qmi.enableGyroscope();
     Serial.println("[IMU] 陀螺仪已启用 - 896.8Hz");
+
+    // 配置加速度计 - 1000Hz采样率（与陀螺仪接近）
+    qmi.configAccelerometer(SensorQMI8658::ACC_RANGE_4G, SensorQMI8658::ACC_ODR_1000Hz);
+    qmi.enableAccelerometer();
+    Serial.println("[IMU] 加速度计已启用 - 1000Hz");
     
     // 根据官方文档：同时启用加速度计和陀螺仪时，输出频率基于陀螺仪频率
+    // 注意：两个传感器采样率应该尽可能接近，避免getDataReady()问题
     Serial.println("[IMU] 数据输出频率将基于陀螺仪频率 (896.8Hz)");
 
     // 配置三轴任意运动检测
@@ -305,35 +306,74 @@ void IMU::setGyroEnabled(bool enabled)
 
 void IMU::loop()
 {
-    if (qmi.getDataReady())
-    {
-        get_device_state()->imuReady = true;
-        qmi.getAccelerometer(imu_data.accel_x, imu_data.accel_y, imu_data.accel_z);
+    // 直接读取数据，不依赖getDataReady()检查
+    // 因为主循环每20ms调用一次，频率已经足够
+    get_device_state()->imuReady = true;
+    
+    // 添加调试：检查数据读取前的状态
+    static unsigned long lastDebugTime = 0;
+    static float last_accel_x = 0, last_accel_y = 0, last_accel_z = 0;
+    static float last_gyro_x = 0, last_gyro_y = 0, last_gyro_z = 0;
+    
+    // 读取加速度计数据
+    float new_accel_x, new_accel_y, new_accel_z;
+    bool accel_success = qmi.getAccelerometer(new_accel_x, new_accel_y, new_accel_z);
+    
+    // 读取陀螺仪数据
+    float new_gyro_x, new_gyro_y, new_gyro_z;
+    bool gyro_success = qmi.getGyroscope(new_gyro_x, new_gyro_y, new_gyro_z);
+    
+    // 每5秒输出一次调试信息
+    if (millis() - lastDebugTime > 5000) {
+        Serial.printf("[IMU DEBUG] Accel read: %s, Gyro read: %s\n", 
+                     accel_success ? "OK" : "FAIL", 
+                     gyro_success ? "OK" : "FAIL");
+        
+        Serial.printf("[IMU DEBUG] Accel change: %.3f, Gyro change: %.3f\n",
+                     abs(new_accel_x - last_accel_x) + abs(new_accel_y - last_accel_y) + abs(new_accel_z - last_accel_z),
+                     abs(new_gyro_x - last_gyro_x) + abs(new_gyro_y - last_gyro_y) + abs(new_gyro_z - last_gyro_z));
+        
+        lastDebugTime = millis();
+    }
+    
+    // 更新数据
+    imu_data.accel_x = new_accel_x;
+    imu_data.accel_y = new_accel_y;
+    imu_data.accel_z = new_accel_z;
+    imu_data.gyro_x = new_gyro_x;
+    imu_data.gyro_y = new_gyro_y;
+    imu_data.gyro_z = new_gyro_z;
+    
+    // 保存用于下次比较
+    last_accel_x = new_accel_x;
+    last_accel_y = new_accel_y;
+    last_accel_z = new_accel_z;
+    last_gyro_x = new_gyro_x;
+    last_gyro_y = new_gyro_y;
+    last_gyro_z = new_gyro_z;
 
-        // 应用传感器旋转（如果定义了）
+    // 应用传感器旋转（如果定义了）
 #if defined(IMU_ROTATION)
-        // 顺时针旋转90度（适用于传感器侧装）
-        float temp = imu_data.accel_x;
-        imu_data.accel_x = imu_data.accel_y;
-        imu_data.accel_y = -temp;
+    // 顺时针旋转90度（适用于传感器侧装）
+    float temp = imu_data.accel_x;
+    imu_data.accel_x = imu_data.accel_y;
+    imu_data.accel_y = -temp;
 #endif
 
-        qmi.getGyroscope(imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
+    // 使用加速度计计算姿态角
+    float roll_acc = atan2(imu_data.accel_y, imu_data.accel_z) * 180 / M_PI;
+    float pitch_acc = atan2(-imu_data.accel_x, sqrt(imu_data.accel_y * imu_data.accel_y + imu_data.accel_z * imu_data.accel_z)) * 180 / M_PI;
 
-        // 使用加速度计计算姿态角
-        float roll_acc = atan2(imu_data.accel_y, imu_data.accel_z) * 180 / M_PI;
-        float pitch_acc = atan2(-imu_data.accel_x, sqrt(imu_data.accel_y * imu_data.accel_y + imu_data.accel_z * imu_data.accel_z)) * 180 / M_PI;
+    // 使用陀螺仪数据和互补滤波更新姿态角
+    imu_data.roll = ALPHA * (imu_data.roll + imu_data.gyro_x * dt) + (1.0 - ALPHA) * roll_acc;
+    imu_data.pitch = ALPHA * (imu_data.pitch + imu_data.gyro_y * dt) + (1.0 - ALPHA) * pitch_acc;
 
-        // 使用陀螺仪数据和互补滤波更新姿态角
-        imu_data.roll = ALPHA * (imu_data.roll + imu_data.gyro_x * dt) + (1.0 - ALPHA) * roll_acc;
-        imu_data.pitch = ALPHA * (imu_data.pitch + imu_data.gyro_y * dt) + (1.0 - ALPHA) * pitch_acc;
+    imu_data.temperature = qmi.getTemperature_C();
 
-        imu_data.temperature = qmi.getTemperature_C();
-
-        // 处理运动检测中断
-        if (motionDetectionEnabled && isMotionDetected())
-        {
-            static unsigned long lastMotionTime = 0;
+    // 处理运动检测中断
+    if (motionDetectionEnabled && isMotionDetected())
+    {
+        static unsigned long lastMotionTime = 0;
             unsigned long now = millis();
             if (now - lastMotionTime > MOTION_DETECTION_DEBOUNCE_MS)
             {

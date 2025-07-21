@@ -72,7 +72,7 @@
 // OTA升级配置
 #define OTA_BATTERY_MIN_LEVEL        90   // 升级所需最低电池电量(%)
 #define OTA_CHECK_INTERVAL           3600000  // 在线升级检查间隔(1小时)
-#define OTA_DOWNLOAD_TIMEOUT         300000UL // 下载超时时间(5分钟)
+#define OTA_DOWNLOAD_TIMEOUT         30000    // 下载超时时间(30秒)
 #define OTA_MAX_RETRY_COUNT          3        // 最大重试次数
 
 // 默认引脚定义（如果platformio.ini中未定义）

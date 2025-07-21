@@ -360,6 +360,6 @@ void loop()
     // air780eg.getGNSS().printGNSSInfo();
     printCompassData();
   }
-
+  imu.printImuData();
   delay(20);
 }
