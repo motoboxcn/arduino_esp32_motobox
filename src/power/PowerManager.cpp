@@ -81,19 +81,19 @@ void PowerManager::loop()
     lastCheck = now;
     
     // 检查车辆状态（如果启用）
-    #ifdef RTC_INT_PIN
     handleVehicleStateChange();
     if (isVehicleStarted()) {
         lastMotionTime = now; // 车辆启动时保持活跃
+        Serial.println("[电源管理] 车辆启动中，不进入睡眠！");
         return;
     }
-    #endif
     
     // 检查IMU运动
     #ifdef ENABLE_IMU
-    extern IMU imu;
     if (imu.detectMotion()) {
         lastMotionTime = now;
+        Serial.println("[电源管理] 检测到运动，不进入睡眠！");
+        return;
     }
     #endif
     
@@ -229,6 +229,9 @@ void PowerManager::disablePeripherals()
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
     btStop();
+
+    // 关闭 LED 
+    pwmLed.setBrightness(0);
     
     // 关闭串口（除了调试串口）
     #ifdef GPS_RX_PIN

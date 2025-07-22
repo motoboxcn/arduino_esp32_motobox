@@ -115,7 +115,7 @@
 // 融合定位配置
 #ifdef ENABLE_FUSION_LOCATION
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）
-#define FUSION_LOCATION_DEBUG_ENABLED    true    // 调试输出
+#define FUSION_LOCATION_DEBUG_ENABLED    false    // 调试输出
 #define FUSION_LOCATION_INITIAL_LAT      39.9042 // 默认初始纬度（北京）
 #define FUSION_LOCATION_INITIAL_LNG      116.4074// 默认初始经度（北京）
 #define FUSION_LOCATION_PRINT_INTERVAL   5000    // 状态打印间隔（毫秒）
