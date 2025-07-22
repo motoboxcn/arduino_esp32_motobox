@@ -14,66 +14,49 @@
 #include "SD/SDManager.h"
 #endif
 
-// 低功耗模式状态枚举
+// 简化的电源状态枚举
 enum PowerState {
     POWER_STATE_NORMAL,           // 正常工作状态
-    POWER_STATE_COUNTDOWN,        // 倒计时状态
     POWER_STATE_PREPARING_SLEEP   // 正在准备进入睡眠状态
 };
 
 class PowerManager {
 public:
     PowerManager();
-    PowerState powerState;        // 当前电源状态
     void begin();
     void loop();
-    bool requestLowPowerMode;
     void enterLowPowerMode();
-    bool configureWakeupSources();
-    bool isDeviceIdle();
     
-    // 新增：获取/设置休眠时间（秒）
+    // 休眠时间管理
     void setSleepTime(unsigned long seconds);
     unsigned long getSleepTime() const;
     
-    // 新增：获取当前电源状态
+    // 状态查询
     PowerState getPowerState() { return powerState; }
-
-    // 检查休眠功能是否启用（由编译时配置决定）
     bool isSleepEnabled() { return sleepEnabled; }
-
-    // 新增：唤醒原因打印与处理
+    
+    // 唤醒处理
     void printWakeupReason();
-    void checkWakeupCause();
-
-     // 新增：打断低功耗模式进入过程
-    void interruptLowPowerMode();
-
-    // 新增：GPIO39稳定性检查
-    bool checkGPIO39Stability();
-
-    // 新增：车辆电门状态检测
-    bool isVehicleStarted();
-    void handleVehicleStateChange();
-
-
 
 private:
-    unsigned long idleThreshold;  // 进入低功耗模式的空闲时间阈值（毫秒）
-    float motionThreshold;        // 运动检测阈值
-    RTC_DATA_ATTR static bool sleepEnabled;  // 是否启用休眠功能（RTC内存，由编译时配置决定）
+    PowerState powerState;        // 当前电源状态
+    unsigned long sleepTimeSec;   // 休眠时间（秒）
+    unsigned long lastMotionTime; // 最后一次检测到运动的时间
     
-    // 新增：运动检测相关变量
-    static const int SAMPLE_COUNT = 5;  // 运动检测采样次数
-    float accumulatedDelta;      // 累积变化量
+    RTC_DATA_ATTR static bool sleepEnabled;  // 是否启用休眠功能
     
+    // 核心功能方法
+    bool isDeviceIdle();          // 检查设备是否空闲
+    bool configureWakeupSources(); // 配置唤醒源
     void disablePeripherals();    // 关闭外设
     void handleWakeup();          // 处理唤醒事件
     void configurePowerDomains(); // 配置电源域
-
-    unsigned long lastMotionTime; // 最后一次检测到运动的时间
-    unsigned long sleepTimeSec;   // 休眠时间（秒）
-   
+    
+    // 车辆状态检测（如果启用）
+    #ifdef RTC_INT_PIN
+    bool isVehicleStarted();
+    void handleVehicleStateChange();
+    #endif
 };
 
 extern PowerManager powerManager;

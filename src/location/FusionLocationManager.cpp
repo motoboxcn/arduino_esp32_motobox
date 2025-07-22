@@ -127,27 +127,47 @@ bool MotoBoxMagProvider::isAvailable() {
 
 FusionLocationManager::FusionLocationManager() 
     : imuProvider(nullptr), gpsProvider(nullptr), magProvider(nullptr),
-      fusionLocation(nullptr), initialized(false), debug_enabled(false),
+      simpleFusion(nullptr), ekfTracker(nullptr), currentAlgorithm(FUSION_EKF_VEHICLE),
+      initialized(false), debug_enabled(false),
       update_interval(100), last_update_time(0), last_debug_print_time(0),
       initial_latitude(39.9042), initial_longitude(116.4074) {
     
     memset(&stats, 0, sizeof(stats));
+    
+    // 设置默认EKF配置（适合摩托车）
+    ekfConfig.processNoisePos = 0.5f;        // 摩托车位置变化较快
+    ekfConfig.processNoiseVel = 2.0f;        // 速度变化较大
+    ekfConfig.processNoiseHeading = 0.05f;   // 航向变化较频繁
+    ekfConfig.processNoiseHeadingRate = 0.2f;
+    
+    ekfConfig.gpsNoisePos = 25.0f;           // GPS精度约5m
+    ekfConfig.imuNoiseAccel = 0.2f;          // 摩托车振动较大
+    ekfConfig.imuNoiseGyro = 0.02f;
+    
+    // 设置摩托车模型参数
+    vehicleModel.wheelbase = 1.4f;           // 摩托车轴距约1.4m
+    vehicleModel.maxAcceleration = 4.0f;     // 摩托车加速性能较好
+    vehicleModel.maxDeceleration = 10.0f;    // 制动性能
+    vehicleModel.maxSteeringAngle = 0.8f;    // 摩托车转向角度较大
 }
 
 FusionLocationManager::~FusionLocationManager() {
-    if (fusionLocation) delete fusionLocation;
+    if (simpleFusion) delete simpleFusion;
+    if (ekfTracker) delete ekfTracker;
     if (imuProvider) delete imuProvider;
     if (gpsProvider) delete gpsProvider;
     if (magProvider) delete magProvider;
 }
 
-bool FusionLocationManager::begin(double initLat, double initLng) {
+bool FusionLocationManager::begin(FusionAlgorithm algorithm, double initLat, double initLng) {
     if (initialized) return true;
     
-    Serial.printf("[%s] 初始化融合定位系统...\n", TAG);
+    Serial.printf("[%s] 初始化融合定位系统 (算法: %s)...\n", TAG, 
+                 algorithm == FUSION_EKF_VEHICLE ? "EKF车辆模型" : "简单卡尔曼");
     
     initial_latitude = initLat;
     initial_longitude = initLng;
+    currentAlgorithm = algorithm;
     
     // 创建传感器提供者
     imuProvider = new MotoBoxIMUProvider();
@@ -159,26 +179,35 @@ bool FusionLocationManager::begin(double initLat, double initLng) {
         return false;
     }
     
-    // 创建融合定位对象（IMU是必需的）
-    fusionLocation = new FusionLocation(imuProvider, initLat, initLng);
-    if (!fusionLocation) {
-        Serial.printf("[%s] ❌ 融合定位对象创建失败\n", TAG);
-        return false;
+    // 根据算法类型创建融合对象
+    if (algorithm == FUSION_EKF_VEHICLE) {
+        ekfTracker = new EKFVehicleTracker(imuProvider, initLat, initLng);
+        if (!ekfTracker) {
+            Serial.printf("[%s] ❌ EKF追踪器创建失败\n", TAG);
+            return false;
+        }
+        
+        // 设置传感器和配置
+        ekfTracker->setGPSProvider(gpsProvider);
+        ekfTracker->setMagProvider(magProvider);
+        ekfTracker->setEKFConfig(ekfConfig);
+        ekfTracker->setVehicleModel(vehicleModel);
+        ekfTracker->begin();
+        
+        Serial.printf("[%s] ✅ EKF车辆追踪器初始化成功\n", TAG);
+    } else {
+        simpleFusion = new FusionLocation(imuProvider, initLat, initLng);
+        if (!simpleFusion) {
+            Serial.printf("[%s] ❌ 简单融合对象创建失败\n", TAG);
+            return false;
+        }
+        
+        simpleFusion->setGPSProvider(gpsProvider);
+        simpleFusion->setMagProvider(magProvider);
+        simpleFusion->begin();
+        
+        Serial.printf("[%s] ✅ 简单卡尔曼滤波器初始化成功\n", TAG);
     }
-    
-    // 设置可选传感器
-    if (gpsProvider) {
-        fusionLocation->setGPSProvider(gpsProvider);
-        Serial.printf("[%s] ✅ GPS提供者已设置\n", TAG);
-    }
-    
-    if (magProvider) {
-        fusionLocation->setMagProvider(magProvider);
-        Serial.printf("[%s] ✅ 地磁计提供者已设置\n", TAG);
-    }
-    
-    // 初始化融合定位
-    fusionLocation->begin();
     
     initialized = true;
     last_update_time = millis();
@@ -193,16 +222,26 @@ void FusionLocationManager::loop() {
     if (!initialized) return;
     
     unsigned long currentTime = millis();
-    if (currentTime - last_update_time < update_interval) return;
     
-    // 更新融合定位
-    fusionLocation->update();
+    // 高频更新：EKF算法支持高频IMU数据处理
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        // EKF算法每次都更新，以充分利用高频IMU数据
+        ekfTracker->update();
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        // 简单卡尔曼滤波保持原有的更新间隔
+        if (currentTime - last_update_time >= update_interval) {
+            simpleFusion->update();
+            last_update_time = currentTime;
+        }
+    }
     
-    // 获取融合位置并更新统计
-    Position pos = fusionLocation->getPosition();
-    updateStats(pos);
-    
-    last_update_time = currentTime;
+    // 状态统计和调试信息保持低频更新
+    if (currentTime - last_update_time >= update_interval) {
+        // 获取融合位置并更新统计
+        Position pos = getFusedPosition();
+        updateStats(pos);
+        last_update_time = currentTime;
+    }
     
     // 定期打印调试信息
     if (debug_enabled && currentTime - last_debug_print_time > 5000) {
@@ -218,7 +257,72 @@ Position FusionLocationManager::getFusedPosition() {
         return invalid_pos;
     }
     
-    return fusionLocation->getPosition();
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        return ekfTracker->getPosition();
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        return simpleFusion->getPosition();
+    }
+    
+    Position invalid_pos;
+    invalid_pos.valid = false;
+    return invalid_pos;
+}
+
+bool FusionLocationManager::switchAlgorithm(FusionAlgorithm algorithm) {
+    if (!initialized || algorithm == currentAlgorithm) return true;
+    
+    Serial.printf("[%s] 切换融合算法: %s -> %s\n", TAG,
+                 currentAlgorithm == FUSION_EKF_VEHICLE ? "EKF" : "简单卡尔曼",
+                 algorithm == FUSION_EKF_VEHICLE ? "EKF" : "简单卡尔曼");
+    
+    // 获取当前位置作为新算法的初始位置
+    Position currentPos = getFusedPosition();
+    double lat = currentPos.valid ? currentPos.lat : initial_latitude;
+    double lng = currentPos.valid ? currentPos.lng : initial_longitude;
+    
+    if (algorithm == FUSION_EKF_VEHICLE) {
+        // 切换到EKF
+        if (!ekfTracker) {
+            ekfTracker = new EKFVehicleTracker(imuProvider, lat, lng);
+            if (!ekfTracker) return false;
+            
+            ekfTracker->setGPSProvider(gpsProvider);
+            ekfTracker->setMagProvider(magProvider);
+            ekfTracker->setEKFConfig(ekfConfig);
+            ekfTracker->setVehicleModel(vehicleModel);
+            ekfTracker->begin();
+        }
+    } else {
+        // 切换到简单卡尔曼
+        if (!simpleFusion) {
+            simpleFusion = new FusionLocation(imuProvider, lat, lng);
+            if (!simpleFusion) return false;
+            
+            simpleFusion->setGPSProvider(gpsProvider);
+            simpleFusion->setMagProvider(magProvider);
+            simpleFusion->begin();
+        }
+    }
+    
+    currentAlgorithm = algorithm;
+    Serial.printf("[%s] ✅ 算法切换成功\n", TAG);
+    return true;
+}
+
+void FusionLocationManager::setEKFConfig(const EKFConfig& config) {
+    ekfConfig = config;
+    if (ekfTracker) {
+        ekfTracker->setEKFConfig(config);
+        debugPrint("EKF配置已更新");
+    }
+}
+
+void FusionLocationManager::setVehicleModel(const VehicleModel& model) {
+    vehicleModel = model;
+    if (ekfTracker) {
+        ekfTracker->setVehicleModel(model);
+        debugPrint("车辆模型已更新");
+    }
 }
 
 void FusionLocationManager::debugPrint(const String& message) {
@@ -241,22 +345,40 @@ void FusionLocationManager::updateStats(const Position& pos) {
 
 float FusionLocationManager::getPositionAccuracy() {
     if (!initialized) return -1.0f;
-    return fusionLocation->getPositionAccuracy();
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        return ekfTracker->getPositionAccuracy();
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        return simpleFusion->getPositionAccuracy();
+    }
+    return -1.0f;
 }
 
 float FusionLocationManager::getHeading() {
     if (!initialized) return -1.0f;
-    return fusionLocation->getHeading();
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        return ekfTracker->getHeading();
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        return simpleFusion->getHeading();
+    }
+    return -1.0f;
 }
 
 float FusionLocationManager::getSpeed() {
     if (!initialized) return -1.0f;
-    return fusionLocation->getSpeed();
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        return ekfTracker->getVelocity();  // EKF提供速度估计
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        return simpleFusion->getSpeed();
+    }
+    return -1.0f;
 }
 
 bool FusionLocationManager::isPositionValid() {
     if (!initialized) return false;
-    Position pos = fusionLocation->getPosition();
+    Position pos = getFusedPosition();
     return pos.valid;
 }
 
@@ -264,8 +386,12 @@ void FusionLocationManager::setInitialPosition(double lat, double lng) {
     initial_latitude = lat;
     initial_longitude = lng;
     
-    if (initialized && fusionLocation) {
-        fusionLocation->setInitialPosition(lat, lng);
+    if (initialized) {
+        if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+            ekfTracker->setInitialPosition(lat, lng);
+        } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+            simpleFusion->setInitialPosition(lat, lng);
+        }
         debugPrint("初始位置已更新: " + String(lat, 6) + ", " + String(lng, 6));
     }
 }
@@ -291,19 +417,32 @@ void FusionLocationManager::printStatus() {
         return;
     }
     
-    Position pos = fusionLocation->getPosition();
+    Position pos = getFusedPosition();
     DataSourceStatus status = getDataSourceStatus();
     
     Serial.println("=== 融合定位系统状态 ===");
+    Serial.printf("算法: %s\n", currentAlgorithm == FUSION_EKF_VEHICLE ? "EKF车辆模型" : "简单卡尔曼");
     Serial.printf("位置: %.6f, %.6f (精度: %.1fm)\n", pos.lat, pos.lng, pos.accuracy);
     Serial.printf("航向: %.1f° | 速度: %.1fm/s | 高度: %.1fm\n", pos.heading, pos.speed, pos.altitude);
     Serial.printf("数据源: %s%s%s\n", 
                  status.imu_available ? "IMU " : "",
                  status.gps_available ? "GPS " : "",
                  status.mag_available ? "MAG " : "");
+    
+    bool isInit = false;
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        isInit = ekfTracker->isInitialized();
+    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        isInit = simpleFusion->isInitialized();
+    }
+    
     Serial.printf("有效性: %s | 初始化: %s\n", 
-                 pos.valid ? "有效" : "无效",
-                 fusionLocation->isInitialized() ? "是" : "否");
+                 pos.valid ? "有效" : "无效", isInit ? "是" : "否");
+    
+    // EKF特有信息
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        Serial.printf("航向角速度: %.2f°/s\n", ekfTracker->getHeadingRate() * 57.2958f);
+    }
 }
 
 void FusionLocationManager::printStats() {
@@ -369,8 +508,8 @@ FusionLocationManager::DataSourceStatus FusionLocationManager::getDataSourceStat
         status.last_mag_time = millis();
     }
     
-    if (initialized && fusionLocation) {
-        Position pos = fusionLocation->getPosition();
+    if (initialized) {
+        Position pos = getFusedPosition();
         status.fusion_valid = pos.valid;
         status.last_fusion_time = pos.timestamp;
     }

@@ -6,8 +6,8 @@ WiFiConfigManager wifiManager;
 
 void WiFiEvent(WiFiEvent_t event)
 {
-    // 电源倒计时的时候不处理
-    if (powerManager.powerState == POWER_STATE_COUNTDOWN) {
+    // 电源准备睡眠的时候不处理
+    if (powerManager.getPowerState() == POWER_STATE_PREPARING_SLEEP) {
         return;
     }
     switch (event)

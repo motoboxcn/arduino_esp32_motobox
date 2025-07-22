@@ -22,7 +22,7 @@ public:
      * @param frequency I2C频率，默认100kHz
      * @return 是否初始化成功
      */
-    bool begin(int sda = IIC_SDA_PIN, int scl = IIC_SCL_PIN, uint32_t frequency = 100000);
+    bool begin(int sda = IIC_SDA_PIN, int scl = IIC_SCL_PIN, uint32_t frequency = 50000);
 
     /**
      * @brief 获取Wire对象引用
@@ -40,7 +40,7 @@ public:
     void scanDevices();
 
 private:
-    I2CManager() : _initialized(false), _sda(-1), _scl(-1), _frequency(100000) {}
+    I2CManager() : _initialized(false), _sda(-1), _scl(-1), _frequency(50000) {}
     ~I2CManager() = default;
     
     // 禁用拷贝构造和赋值
@@ -56,6 +56,6 @@ private:
 
 // 全局访问函数
 TwoWire& getSharedWire();
-bool initSharedI2C(int sda = IIC_SDA_PIN, int scl = IIC_SCL_PIN, uint32_t frequency = 100000);
+bool initSharedI2C(int sda = IIC_SDA_PIN, int scl = IIC_SCL_PIN, uint32_t frequency = 50000);
 
 #endif

@@ -188,12 +188,6 @@ void taskDataProcessing(void *parameter)
     air780eg.loop();
 #endif
 
-    // IMU数据处理
-#ifdef ENABLE_IMU
-    imu.setDebug(false);
-    imu.loop();
-#endif
-
 #ifdef ENABLE_SDCARD
     // 数据记录到SD卡
     unsigned long currentTime = millis();
@@ -269,7 +263,6 @@ void setup()
 
   powerManager.printWakeupReason();
 
-  powerManager.checkWakeupCause();
   //================ SD卡初始化开始 ================
 #ifdef ENABLE_SDCARD
   if (sdManager.begin())
@@ -328,10 +321,29 @@ void setup()
   //================ 融合定位初始化开始 ================
 #ifdef ENABLE_FUSION_LOCATION
   Serial.println("[融合定位] 初始化融合定位系统...");
-  if (fusionLocationManager.begin(FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG)) {
-    Serial.println("[融合定位] ✅ 融合定位系统初始化成功");
+  // 使用EKF车辆模型算法，适合摩托车应用
+  if (fusionLocationManager.begin(FUSION_EKF_VEHICLE, FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG)) {
+    Serial.println("[融合定位] ✅ EKF融合定位系统初始化成功");
     fusionLocationManager.setDebug(FUSION_LOCATION_DEBUG_ENABLED);
     fusionLocationManager.setUpdateInterval(FUSION_LOCATION_UPDATE_INTERVAL);
+    
+    // 设置摩托车专用参数
+    EKFConfig motoConfig;
+    motoConfig.processNoisePos = 0.8f;        // 摩托车位置变化较快
+    motoConfig.processNoiseVel = 3.0f;        // 速度变化较大
+    motoConfig.processNoiseHeading = 0.1f;    // 航向变化频繁
+    motoConfig.gpsNoisePos = 16.0f;           // GPS精度约4m
+    motoConfig.imuNoiseAccel = 0.3f;          // 摩托车振动较大
+    fusionLocationManager.setEKFConfig(motoConfig);
+    
+    VehicleModel motoModel;
+    motoModel.wheelbase = 1.4f;               // 摩托车轴距
+    motoModel.maxAcceleration = 5.0f;         // 摩托车加速性能好
+    motoModel.maxDeceleration = 12.0f;        // 制动性能强
+    motoModel.maxSteeringAngle = 1.0f;        // 转向角度大
+    fusionLocationManager.setVehicleModel(motoModel);
+    
+    Serial.println("[融合定位] 摩托车专用参数已设置");
   } else {
     Serial.println("[融合定位] ❌ 融合定位系统初始化失败");
   }
@@ -340,7 +352,7 @@ void setup()
   
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
-  xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
+  // xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
 #ifdef ENABLE_WIFI
   xTaskCreate(taskWiFi, "TaskWiFi", 1024 * 15, NULL, 3, NULL);
 #endif
@@ -357,13 +369,72 @@ void loop()
 {
   static unsigned long loopCount = 0;
   static unsigned long lastLoopReport = 0;
+  static unsigned long lastSlowUpdate = 0;
   loopCount++;
 
-  // 更新融合定位系统
+  // 高频更新：IMU数据读取和融合定位系统更新
+#ifdef ENABLE_IMU
+  imu.loop();
+#endif
+
 #ifdef ENABLE_FUSION_LOCATION
   fusionLocationManager.loop();
 #endif
 
+#ifdef USE_AIR780EG_GSM
+    air780eg.loop();
+#endif
+
+  // 低频更新：其他系统组件（每50ms更新一次）
+  if (millis() - lastSlowUpdate >= 50) {
+    lastSlowUpdate = millis();
+    
+    // 其他系统组件的更新
+#ifdef ENABLE_COMPASS
+    compass.loop();
+#endif
+
+#ifdef BLE_SERVER
+    bs.loop();
+#endif
+
+#ifdef BLE_CLIENT
+    bc.loop();
+#endif
+
+#ifdef ENABLE_TFT
+    tft_loop();
+#endif
+
+    // 电源管理
+    powerManager.loop();
+    
+    // LED状态更新
+    ledManager.loop();
+
+#ifdef BAT_PIN
+    bat.loop();
+#endif
+
+#ifdef BTN_PIN
+    button.loop();
+    BTN::handleButtonEvents();
+#endif
+
+#ifdef RTC_INT_PIN
+    externalPower.loop();
+#endif
+
+#ifdef PWM_LED_PIN
+    pwmLed.loop();
+#endif
+
+#ifdef ENABLE_WIFI
+    wifiManager.loop();
+#endif
+  }
+
+  // 状态报告（每10秒一次）
   if (millis() - lastLoopReport > 10000)
   {
     lastLoopReport = millis();
@@ -380,8 +451,10 @@ void loop()
       delay(1000);
       ESP.restart();
     }
-    // air780eg.getGNSS().printGNSSInfo();
+
+#ifdef ENABLE_COMPASS
     printCompassData();
+#endif
     
     // 打印融合定位状态
 #ifdef ENABLE_FUSION_LOCATION
@@ -394,6 +467,7 @@ void loop()
     }
 #endif
   }
-  imu.printImuData();
-  delay(20);
+
+  // 最小延迟，实现高频更新（约1000Hz）
+  delay(1);
 }

@@ -27,8 +27,8 @@ device_state_t device_state;
 state_changes_t state_changes;
 void print_device_info()
 {
-    // 如果休眠倒计时的时候不打印
-    if (powerManager.powerState == POWER_STATE_COUNTDOWN)
+    // 如果休眠准备中的时候不打印
+    if (powerManager.getPowerState() == POWER_STATE_PREPARING_SLEEP)
     {
         return;
     }

@@ -14,7 +14,7 @@ void IRAM_ATTR IMU::motionISR()
 
 IMU::IMU(int motionIntPin)
     : motionIntPin(motionIntPin),
-    _debug(true),
+    _debug(false),
     _lastDebugPrintTime(0)
 {
     this->motionIntPin = motionIntPin;
@@ -306,8 +306,7 @@ void IMU::setGyroEnabled(bool enabled)
 
 void IMU::loop()
 {
-    // 直接读取数据，不依赖getDataReady()检查
-    // 因为主循环每20ms调用一次，频率已经足够
+    // 高频数据读取，支持EKF算法的高频更新需求
     get_device_state()->imuReady = true;
     
     // 添加调试：检查数据读取前的状态
@@ -382,12 +381,6 @@ void IMU::loop()
         }
     }
     
-    // 调试输出
-    if (millis() - _lastDebugPrintTime > 500)
-    {
-        _lastDebugPrintTime = millis();
-        debugPrint("IMU Heading: " + String(imu_data.roll) + ", " + String(imu_data.pitch) + ", " + String(imu_data.yaw));
-    }
 }
 
 /**

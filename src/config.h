@@ -14,16 +14,15 @@
 #define USE_AIR780EG_GNSS
 
 // SD卡功能
+#ifndef ENABLE_SDCARD
 #define ENABLE_SDCARD
+#endif
 
 // GPS记录功能 (依赖于SD卡功能)
 #ifdef ENABLE_SDCARD
 #define ENABLE_GPS_LOGGER
 #endif
 
-// 其他基础功能
-#define ENABLE_COMPASS
-#define ENABLE_IMU
 #define ENABLE_LED
 // #define ENABLE_TFT  // 暂时禁用TFT
 #define ENABLE_BLE
@@ -120,6 +119,20 @@
 #define FUSION_LOCATION_INITIAL_LAT      39.9042 // 默认初始纬度（北京）
 #define FUSION_LOCATION_INITIAL_LNG      116.4074// 默认初始经度（北京）
 #define FUSION_LOCATION_PRINT_INTERVAL   5000    // 状态打印间隔（毫秒）
+
+// EKF算法配置
+#define FUSION_USE_EKF_DEFAULT           true    // 默认使用EKF算法
+#define FUSION_EKF_PROCESS_NOISE_POS     0.8f    // 位置过程噪声（摩托车）
+#define FUSION_EKF_PROCESS_NOISE_VEL     3.0f    // 速度过程噪声
+#define FUSION_EKF_PROCESS_NOISE_HEADING 0.1f    // 航向过程噪声
+#define FUSION_EKF_GPS_NOISE_POS         16.0f   // GPS测量噪声
+#define FUSION_EKF_IMU_NOISE_ACCEL       0.3f    // IMU加速度噪声
+
+// 摩托车模型参数
+#define MOTO_WHEELBASE                   1.4f    // 轴距（米）
+#define MOTO_MAX_ACCELERATION            5.0f    // 最大加速度（m/s²）
+#define MOTO_MAX_DECELERATION            12.0f   // 最大减速度（m/s²）
+#define MOTO_MAX_STEERING_ANGLE          1.0f    // 最大转向角（弧度）
 #endif // ENABLE_FUSION_LOCATION
 
 #endif // CONFIG_H

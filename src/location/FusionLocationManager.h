@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <FusionLocation.h>
+#include <EKFVehicleTracker.h>  // 新增EKF支持
 #include "config.h"
 
 #ifdef ENABLE_IMU
@@ -15,6 +16,12 @@
 
 // Air780EG GPS数据
 #include "Air780EG.h"
+
+// 融合算法类型
+enum FusionAlgorithm {
+    FUSION_SIMPLE_KALMAN,    // 简单卡尔曼滤波
+    FUSION_EKF_VEHICLE       // 扩展卡尔曼滤波（车辆模型）
+};
 
 /**
  * @brief 项目专用的IMU数据提供者
@@ -72,7 +79,7 @@ public:
 
 /**
  * @brief 融合定位管理器
- * 整合IMU、GPS、地磁计数据，提供高精度位置信息
+ * 整合IMU、GPS、地磁计数据，支持多种融合算法
  */
 class FusionLocationManager {
 private:
@@ -83,8 +90,12 @@ private:
     MotoBoxGPSProvider* gpsProvider;
     MotoBoxMagProvider* magProvider;
     
-    // 融合定位对象
-    FusionLocation* fusionLocation;
+    // 融合算法对象
+    FusionLocation* simpleFusion;      // 简单卡尔曼滤波
+    EKFVehicleTracker* ekfTracker;     // EKF车辆追踪器
+    
+    // 当前使用的算法
+    FusionAlgorithm currentAlgorithm;
     
     // 配置参数
     bool initialized;
@@ -96,6 +107,10 @@ private:
     // 初始位置（可配置）
     double initial_latitude;
     double initial_longitude;
+    
+    // EKF配置
+    EKFConfig ekfConfig;
+    VehicleModel vehicleModel;
     
     // 状态统计
     struct {
@@ -115,11 +130,13 @@ public:
     
     /**
      * @brief 初始化融合定位系统
+     * @param algorithm 融合算法类型
      * @param initLat 初始纬度（默认使用北京坐标）
      * @param initLng 初始经度
      * @return 是否初始化成功
      */
-    bool begin(double initLat = 39.9042, double initLng = 116.4074);
+    bool begin(FusionAlgorithm algorithm = FUSION_EKF_VEHICLE, 
+               double initLat = 39.9042, double initLng = 116.4074);
     
     /**
      * @brief 主循环更新
@@ -132,6 +149,23 @@ public:
      * @return Position结构体，包含融合后的位置、精度、航向等信息
      */
     Position getFusedPosition();
+    
+    /**
+     * @brief 切换融合算法
+     * @param algorithm 新的融合算法
+     * @return 是否切换成功
+     */
+    bool switchAlgorithm(FusionAlgorithm algorithm);
+    
+    /**
+     * @brief 设置EKF配置参数
+     */
+    void setEKFConfig(const EKFConfig& config);
+    
+    /**
+     * @brief 设置车辆模型参数
+     */
+    void setVehicleModel(const VehicleModel& model);
     
     /**
      * @brief 获取位置精度估计
@@ -198,6 +232,11 @@ public:
      * @brief 重置统计信息
      */
     void resetStats();
+    
+    /**
+     * @brief 获取当前使用的算法
+     */
+    FusionAlgorithm getCurrentAlgorithm() const { return currentAlgorithm; }
     
     /**
      * @brief 获取数据源状态
