@@ -112,6 +112,19 @@ private:
     EKFConfig ekfConfig;
     VehicleModel vehicleModel;
     
+    // LBS/WiFi兜底定位配置
+    struct FallbackLocationConfig {
+        bool enabled;                    // 是否启用兜底定位
+        unsigned long gnss_timeout;     // GNSS信号丢失超时时间(ms)
+        unsigned long lbs_interval;     // LBS定位间隔(ms)
+        unsigned long wifi_interval;    // WiFi定位间隔(ms)
+        bool prefer_wifi_over_lbs;      // 是否优先使用WiFi定位
+        unsigned long last_lbs_time;    // 上次LBS定位时间
+        unsigned long last_wifi_time;   // 上次WiFi定位时间
+        bool lbs_in_progress;           // LBS定位进行中标志
+        bool wifi_in_progress;          // WiFi定位进行中标志
+    } fallbackConfig;
+    
     // 状态统计
     struct {
         unsigned long total_updates;
@@ -119,10 +132,18 @@ private:
         unsigned long imu_updates;
         unsigned long mag_updates;
         unsigned long fusion_updates;
+        unsigned long lbs_updates;      // LBS定位次数
+        unsigned long wifi_updates;     // WiFi定位次数
     } stats;
     
     void debugPrint(const String& message);
     void updateStats(const Position& pos);
+    
+    // 兜底定位相关方法
+    void handleFallbackLocation();
+    bool isGNSSSignalLost();
+    bool tryLBSLocation();
+    bool tryWiFiLocation();
     
 public:
     FusionLocationManager();
@@ -227,6 +248,38 @@ public:
      * @brief 获取位置信息的JSON字符串
      */
     String getPositionJSON();
+    
+    /**
+     * @brief 配置LBS/WiFi兜底定位
+     * @param enable 是否启用兜底定位
+     * @param gnss_timeout GNSS信号丢失超时时间(ms)，默认30秒
+     * @param lbs_interval LBS定位间隔(ms)，默认5分钟
+     * @param wifi_interval WiFi定位间隔(ms)，默认3分钟
+     * @param prefer_wifi 是否优先使用WiFi定位，默认true
+     */
+    void configureFallbackLocation(bool enable = true, 
+                                 unsigned long gnss_timeout = 30000,
+                                 unsigned long lbs_interval = 300000,
+                                 unsigned long wifi_interval = 180000,
+                                 bool prefer_wifi = true);
+    
+    /**
+     * @brief 手动触发LBS定位
+     * @return 是否成功启动定位请求
+     */
+    bool requestLBSLocation();
+    
+    /**
+     * @brief 手动触发WiFi定位
+     * @return 是否成功启动定位请求
+     */
+    bool requestWiFiLocation();
+    
+    /**
+     * @brief 获取当前定位来源
+     * @return 定位来源字符串 ("GNSS", "WiFi", "LBS", "Unknown")
+     */
+    String getLocationSource();
     
     /**
      * @brief 重置统计信息

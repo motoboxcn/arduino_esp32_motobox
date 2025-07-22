@@ -31,6 +31,9 @@
 #include "audio/AudioManager.h"
 #endif
 
+#ifdef ENABLE_FUSION_LOCATION
+#include "location/FusionLocationManager.h"
+#endif
 
 
 typedef struct

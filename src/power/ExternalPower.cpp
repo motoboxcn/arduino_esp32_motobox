@@ -29,7 +29,7 @@ void ExternalPower::begin()
     // 更新设备状态
     device_state.external_power = _is_connected;
     
-    debugPrint(String("外部电源检测初始化完成，引脚: ") + String(_pin) + 
+    Serial.println(String("外部电源检测初始化完成，引脚: ") + String(_pin) + 
                ", 初始状态: " + (_is_connected ? "已连接" : "未连接"));
 }
 

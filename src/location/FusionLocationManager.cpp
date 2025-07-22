@@ -68,8 +68,8 @@ bool MotoBoxGPSProvider::getData(GPSData& data) {
     last_update_time = data.timestamp;
     
     if (debug_enabled) {
-        Serial.printf("[GPS] GPS数据: 位置(%.6f,%.6f) 高度%.1fm 精度%.1fm 卫星%d\n", 
-                     data.lat, data.lng, data.altitude, data.accuracy, gnss.satellites);
+        Serial.printf("[GPS] GPS数据: 位置(%.6f,%.6f) 高度%.1fm 精度%.1fm 卫星%d 来源:%s\n", 
+                     data.lat, data.lng, data.altitude, data.accuracy, gnss.satellites, gnss.location_type.c_str());
     }
     
     return true;
@@ -133,6 +133,17 @@ FusionLocationManager::FusionLocationManager()
       initial_latitude(39.9042), initial_longitude(116.4074) {
     
     memset(&stats, 0, sizeof(stats));
+    
+    // 初始化兜底定位配置
+    fallbackConfig.enabled = false;
+    fallbackConfig.gnss_timeout = 30000;      // 30秒
+    fallbackConfig.lbs_interval = 300000;     // 5分钟
+    fallbackConfig.wifi_interval = 180000;    // 3分钟
+    fallbackConfig.prefer_wifi_over_lbs = true;
+    fallbackConfig.last_lbs_time = 0;
+    fallbackConfig.last_wifi_time = 0;
+    fallbackConfig.lbs_in_progress = false;
+    fallbackConfig.wifi_in_progress = false;
     
     // 设置默认EKF配置（适合摩托车）
     ekfConfig.processNoisePos = 0.5f;        // 摩托车位置变化较快
@@ -240,6 +251,12 @@ void FusionLocationManager::loop() {
         // 获取融合位置并更新统计
         Position pos = getFusedPosition();
         updateStats(pos);
+        
+        // 处理兜底定位逻辑
+        if (fallbackConfig.enabled) {
+            handleFallbackLocation();
+        }
+        
         last_update_time = currentTime;
     }
     
@@ -419,10 +436,12 @@ void FusionLocationManager::printStatus() {
     
     Position pos = getFusedPosition();
     DataSourceStatus status = getDataSourceStatus();
+    String locationSource = getLocationSource();
     
     Serial.println("=== 融合定位系统状态 ===");
     Serial.printf("算法: %s\n", currentAlgorithm == FUSION_EKF_VEHICLE ? "EKF车辆模型" : "简单卡尔曼");
-    Serial.printf("位置: %.6f, %.6f (精度: %.1fm)\n", pos.lat, pos.lng, pos.accuracy);
+    Serial.printf("位置: %.6f, %.6f (精度: %.1fm) [来源: %s]\n", 
+                 pos.lat, pos.lng, pos.accuracy, locationSource.c_str());
     Serial.printf("航向: %.1f° | 速度: %.1fm/s | 高度: %.1fm\n", pos.heading, pos.speed, pos.altitude);
     Serial.printf("数据源: %s%s%s\n", 
                  status.imu_available ? "IMU " : "",
@@ -439,6 +458,14 @@ void FusionLocationManager::printStatus() {
     Serial.printf("有效性: %s | 初始化: %s\n", 
                  pos.valid ? "有效" : "无效", isInit ? "是" : "否");
     
+    // 兜底定位状态
+    if (fallbackConfig.enabled) {
+        Serial.printf("兜底定位: %s | GNSS信号: %s\n",
+                     "启用", isGNSSSignalLost() ? "丢失" : "正常");
+        if (fallbackConfig.lbs_in_progress) Serial.println("LBS定位进行中...");
+        if (fallbackConfig.wifi_in_progress) Serial.println("WiFi定位进行中...");
+    }
+    
     // EKF特有信息
     if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
         Serial.printf("航向角速度: %.2f°/s\n", ekfTracker->getHeadingRate() * 57.2958f);
@@ -450,43 +477,255 @@ void FusionLocationManager::printStats() {
     Serial.printf("总更新次数: %lu\n", stats.total_updates);
     Serial.printf("融合更新: %lu | GPS: %lu | IMU: %lu | MAG: %lu\n", 
                  stats.fusion_updates, stats.gps_updates, stats.imu_updates, stats.mag_updates);
+    Serial.printf("兜底定位: LBS: %lu | WiFi: %lu\n", stats.lbs_updates, stats.wifi_updates);
     
     if (stats.total_updates > 0) {
         Serial.printf("成功率: %.1f%%\n", (float)stats.fusion_updates / stats.total_updates * 100.0f);
     }
+    
+    if (fallbackConfig.enabled) {
+        Serial.println("=== 兜底定位配置 ===");
+        Serial.printf("GNSS超时: %lus | LBS间隔: %lus | WiFi间隔: %lus\n",
+                     fallbackConfig.gnss_timeout/1000,
+                     fallbackConfig.lbs_interval/1000,
+                     fallbackConfig.wifi_interval/1000);
+        Serial.printf("优先WiFi: %s | 当前定位源: %s\n",
+                     fallbackConfig.prefer_wifi_over_lbs ? "是" : "否",
+                     getLocationSource().c_str());
+    }
 }
 
+/*
+{
+  "latitude": 0,
+  "longitude": 0,
+  "altitude": 0,
+  "speed": 0,
+  "course": 0,
+  "hdop": 1,
+  "date": "",
+  "timestamp": "",
+  "location_type": "GNSS",
+  "satellites": 99,
+  "is_fixed": true,
+  "data_valid": false
+}*/
 String FusionLocationManager::getPositionJSON() {
     Position pos = getFusedPosition();
     DataSourceStatus status = getDataSourceStatus();
-    
+
     String json = "{";
-    json += "\"valid\":" + String(pos.valid ? "true" : "false") + ",";
-    json += "\"lat\":" + String(pos.lat, 6) + ",";
-    json += "\"lng\":" + String(pos.lng, 6) + ",";
+    json += "\"latitude\":" + String(pos.lat, 6) + ",";
+    json += "\"longitude\":" + String(pos.lng, 6) + ",";
     json += "\"altitude\":" + String(pos.altitude, 2) + ",";
-    json += "\"accuracy\":" + String(pos.accuracy, 1) + ",";
-    json += "\"heading\":" + String(pos.heading, 1) + ",";
     json += "\"speed\":" + String(pos.speed, 2) + ",";
+    json += "\"course\":" + String(pos.heading, 1) + ",";
+    json += "\"hdop\":" + String(pos.accuracy, 1) + ",";
     json += "\"timestamp\":" + String(pos.timestamp) + ",";
-    json += "\"sources\":{";
-    json += "\"gps\":" + String(pos.sources.hasGPS ? "true" : "false") + ",";
-    json += "\"imu\":" + String(pos.sources.hasIMU ? "true" : "false") + ",";
-    json += "\"mag\":" + String(pos.sources.hasMag ? "true" : "false");
-    json += "},";
-    json += "\"data_sources\":{";
-    json += "\"imu_available\":" + String(status.imu_available ? "true" : "false") + ",";
-    json += "\"gps_available\":" + String(status.gps_available ? "true" : "false") + ",";
-    json += "\"mag_available\":" + String(status.mag_available ? "true" : "false");
+    json += "\"location_type\":\"FUSION_LOCATION\",";
+    json += "\"satellites\":" + String(status.gps_available ? air780eg.getGNSS().gnss_data.satellites : 0) + ",";
+    json += "\"is_fixed\":" + String(status.gps_available ? "true" : "false") + ",";
+    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false") + ",";
     json += "}";
-    json += "}";
-    
     return json;
 }
+// String FusionLocationManager::getPositionJSON() {
+        //     Position pos = getFusedPosition();
+//     DataSourceStatus status = getDataSourceStatus();
+    
+//     String json = "{";
+//     json += "\"valid\":" + String(pos.valid ? "true" : "false") + ",";
+//     json += "\"lat\":" + String(pos.lat, 6) + ",";
+//     json += "\"lng\":" + String(pos.lng, 6) + ",";
+//     json += "\"altitude\":" + String(pos.altitude, 2) + ",";
+//     json += "\"accuracy\":" + String(pos.accuracy, 1) + ",";
+//     json += "\"heading\":" + String(pos.heading, 1) + ",";
+//     json += "\"speed\":" + String(pos.speed, 2) + ",";
+//     json += "\"timestamp\":" + String(pos.timestamp) + ",";
+//     json += "\"sources\":{";
+//     json += "\"gps\":" + String(pos.sources.hasGPS ? "true" : "false") + ",";
+//     json += "\"imu\":" + String(pos.sources.hasIMU ? "true" : "false") + ",";
+//     json += "\"mag\":" + String(pos.sources.hasMag ? "true" : "false");
+//     json += "},";
+//     json += "\"data_sources\":{";
+//     json += "\"imu_available\":" + String(status.imu_available ? "true" : "false") + ",";
+//     json += "\"gps_available\":" + String(status.gps_available ? "true" : "false") + ",";
+//     json += "\"mag_available\":" + String(status.mag_available ? "true" : "false");
+//     json += "}";
+//     json += "}";
+    
+//     return json;
+// }
 
 void FusionLocationManager::resetStats() {
     memset(&stats, 0, sizeof(stats));
     debugPrint("统计信息已重置");
+}
+
+void FusionLocationManager::configureFallbackLocation(bool enable, 
+                                                     unsigned long gnss_timeout,
+                                                     unsigned long lbs_interval,
+                                                     unsigned long wifi_interval,
+                                                     bool prefer_wifi) {
+    fallbackConfig.enabled = enable;
+    fallbackConfig.gnss_timeout = gnss_timeout;
+    fallbackConfig.lbs_interval = lbs_interval;
+    fallbackConfig.wifi_interval = wifi_interval;
+    fallbackConfig.prefer_wifi_over_lbs = prefer_wifi;
+    
+    debugPrint("兜底定位配置: " + String(enable ? "启用" : "禁用") + 
+               ", GNSS超时:" + String(gnss_timeout/1000) + "s" +
+               ", LBS间隔:" + String(lbs_interval/1000) + "s" +
+               ", WiFi间隔:" + String(wifi_interval/1000) + "s" +
+               ", 优先WiFi:" + String(prefer_wifi ? "是" : "否"));
+}
+
+void FusionLocationManager::handleFallbackLocation() {
+    if (!fallbackConfig.enabled) return;
+    
+    unsigned long currentTime = millis();
+    
+    // 检查GNSS信号是否丢失
+    if (isGNSSSignalLost()) {
+        debugPrint("GNSS信号丢失，启动兜底定位策略");
+        
+        // 根据配置决定使用WiFi还是LBS
+        if (fallbackConfig.prefer_wifi_over_lbs) {
+            // 优先尝试WiFi定位
+            if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
+                if (tryWiFiLocation()) {
+                    fallbackConfig.last_wifi_time = currentTime;
+                    return; // WiFi定位成功，不再尝试LBS
+                }
+            }
+            
+            // WiFi定位失败或未到间隔时间，尝试LBS
+            if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
+                if (tryLBSLocation()) {
+                    fallbackConfig.last_lbs_time = currentTime;
+                }
+            }
+        } else {
+            // 优先尝试LBS定位
+            if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
+                if (tryLBSLocation()) {
+                    fallbackConfig.last_lbs_time = currentTime;
+                    return; // LBS定位成功，不再尝试WiFi
+                }
+            }
+            
+            // LBS定位失败或未到间隔时间，尝试WiFi
+            if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
+                if (tryWiFiLocation()) {
+                    fallbackConfig.last_wifi_time = currentTime;
+                }
+            }
+        }
+    }
+}
+
+bool FusionLocationManager::isGNSSSignalLost() {
+    if (!gpsProvider || !gpsProvider->isAvailable()) {
+        return true;
+    }
+    
+    // 检查GNSS数据的时效性
+    gnss_data_t& gnss = air780eg.getGNSS().gnss_data;
+    unsigned long currentTime = millis();
+    
+    // 如果数据无效或超过超时时间，认为信号丢失
+    if (!gnss.data_valid || !gnss.is_fixed) {
+        return true;
+    }
+    
+    // 检查数据是否过期
+    if (currentTime - gnss.last_update > fallbackConfig.gnss_timeout) {
+        return true;
+    }
+    
+    // 检查定位类型，如果不是GNSS，也认为GNSS信号丢失
+    if (gnss.location_type != "GNSS") {
+        return true;
+    }
+    
+    return false;
+}
+
+bool FusionLocationManager::tryLBSLocation() {
+    if (fallbackConfig.lbs_in_progress) {
+        debugPrint("LBS定位正在进行中，跳过");
+        return false;
+    }
+    
+    debugPrint("尝试LBS基站定位...");
+    fallbackConfig.lbs_in_progress = true;
+    
+    // 使用Air780EG的LBS定位功能
+    bool success = air780eg.getGNSS().updateLBS();
+    
+    fallbackConfig.lbs_in_progress = false;
+    
+    if (success) {
+        stats.lbs_updates++;
+        debugPrint("LBS定位成功");
+        return true;
+    } else {
+        debugPrint("LBS定位失败");
+        return false;
+    }
+}
+
+bool FusionLocationManager::tryWiFiLocation() {
+    if (fallbackConfig.wifi_in_progress) {
+        debugPrint("WiFi定位正在进行中，跳过");
+        return false;
+    }
+    
+    debugPrint("尝试WiFi定位...");
+    fallbackConfig.wifi_in_progress = true;
+    
+    // 使用Air780EG的WiFi定位功能
+    bool success = air780eg.getGNSS().updateWIFILocation();
+    
+    fallbackConfig.wifi_in_progress = false;
+    
+    if (success) {
+        stats.wifi_updates++;
+        debugPrint("WiFi定位成功");
+        return true;
+    } else {
+        debugPrint("WiFi定位失败");
+        return false;
+    }
+}
+
+bool FusionLocationManager::requestLBSLocation() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法执行LBS定位");
+        return false;
+    }
+    
+    debugPrint("手动请求LBS定位");
+    return tryLBSLocation();
+}
+
+bool FusionLocationManager::requestWiFiLocation() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法执行WiFi定位");
+        return false;
+    }
+    
+    debugPrint("手动请求WiFi定位");
+    return tryWiFiLocation();
+}
+
+String FusionLocationManager::getLocationSource() {
+    if (!initialized || !gpsProvider || !gpsProvider->isAvailable()) {
+        return "Unknown";
+    }
+    
+    gnss_data_t& gnss = air780eg.getGNSS().gnss_data;
+    return gnss.location_type;
 }
 
 FusionLocationManager::DataSourceStatus FusionLocationManager::getDataSourceStatus() {

@@ -111,19 +111,8 @@ String getDeviceStatusJSON()
 
 String getLocationJSON()
 {
-    // 如果 gnss 定位差，则走wifi 和 lbs 获取定位
-    if (!air780eg.getGNSS().isDataValid())
-    {
-        // 每2分钟一次定位，因为这个定位比较耗时
-        static unsigned long lastUpdateTime = 0;
-        if (millis() - lastUpdateTime > 60000 * 2)
-        {
-            lastUpdateTime = millis();
-            if (!air780eg.getGNSS().updateWIFILocation())
-                air780eg.getGNSS().updateLBS();
-        }
-    }
-    return air780eg.getGNSS().getLocationJSON();
+    // 走惯导估算获取位置信息
+    return fusionLocationManager.getPositionJSON();
 }
 
 void mqttMessageCallback(const String &topic, const String &payload)
