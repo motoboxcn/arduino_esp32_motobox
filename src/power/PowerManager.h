@@ -35,6 +35,9 @@ public:
     PowerState getPowerState() { return powerState; }
     bool isSleepEnabled() { return sleepEnabled; }
     
+    // 测试和调试
+    void testSafeEnterSleep();    // 安全的休眠测试
+    
     // 唤醒处理
     void printWakeupReason();
 

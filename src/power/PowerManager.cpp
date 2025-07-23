@@ -240,10 +240,15 @@ void PowerManager::disablePeripherals()
     
     // 1. 关闭 Air780EG 模块（最大功耗外设）
     #ifdef USE_AIR780EG_GSM
-    extern Air780EG air780eg;
     Serial.println("[电源管理] 关闭 Air780EG 模块...");
-    air780eg.powerOff();
-    delay(1000); // 等待模块完全关闭
+    extern Air780EG air780eg;
+    if (air780eg.isInitialized()) {
+        air780eg.powerOff();
+        Serial.println("[电源管理] ✅ Air780EG 模块已关闭");
+        delay(1000); // 等待模块完全关闭
+    } else {
+        Serial.println("[电源管理] Air780EG 未初始化，跳过关闭");
+    }
     #endif
     
     // 2. 关闭WiFi和蓝牙
@@ -263,11 +268,17 @@ void PowerManager::disablePeripherals()
     pwmLed.deinit(); // 完全关闭PWM
     #endif
     
-    // 4. 关闭 SD 卡
+    // 4. 安全关闭 SD 卡
     #ifdef ENABLE_SDCARD
     Serial.println("[电源管理] 关闭 SD 卡...");
     extern SDManager sdManager;
-    sdManager.end();
+    // 检查 SD 卡是否已初始化
+    if (sdManager.isInitialized()) {
+        sdManager.end();
+        Serial.println("[电源管理] ✅ SD 卡已关闭");
+    } else {
+        Serial.println("[电源管理] SD 卡未初始化，跳过关闭");
+    }
     #endif
     
     // 5. 关闭 TFT 显示屏
@@ -281,9 +292,16 @@ void PowerManager::disablePeripherals()
     Serial2.end();
     #endif
     
-    // 7. 关闭 ADC
-    Serial.println("[电源管理] 关闭 ADC...");
-    adc_power_release();
+    // 7. 安全关闭 ADC
+    Serial.println("[电源管理] 安全关闭 ADC...");
+    #ifdef BAT_PIN
+    // 只有在使用 ADC 的情况下才尝试关闭
+    // 暂时注释掉 adc_power_release() 避免崩溃
+    // TODO: 需要检查 ADC 状态后再决定是否调用
+    Serial.println("[电源管理] ADC 电源管理已跳过（避免崩溃）");
+    #else
+    Serial.println("[电源管理] 未使用 ADC，跳过关闭");
+    #endif
     
     // 8. 关闭不必要的 GPIO 上拉
     Serial.println("[电源管理] 配置 GPIO 低功耗模式...");
@@ -346,6 +364,62 @@ void PowerManager::configureGPIOForSleep()
     }
     
     Serial.println("[电源管理] ✅ GPIO 低功耗配置完成");
+}
+
+void PowerManager::testSafeEnterSleep()
+{
+    Serial.println("\n=== 安全休眠测试开始 ===");
+    
+    // 1. 检查当前状态
+    Serial.println("[测试] 检查系统状态...");
+    
+    // 2. 逐步关闭外设，每步都检查
+    Serial.println("[测试] 开始逐步关闭外设...");
+    
+    // 测试 Air780EG 关闭
+    #ifdef USE_AIR780EG_GSM
+    extern Air780EG air780eg;
+    if (air780eg.isInitialized()) {
+        Serial.println("[测试] 关闭 Air780EG...");
+        air780eg.powerOff();
+        delay(2000);
+        Serial.println("[测试] ✅ Air780EG 关闭完成");
+    }
+    #endif
+    
+    // 测试 WiFi 关闭
+    Serial.println("[测试] 关闭 WiFi...");
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+    delay(1000);
+    Serial.println("[测试] ✅ WiFi 关闭完成");
+    
+    // 测试蓝牙关闭
+    Serial.println("[测试] 关闭蓝牙...");
+    if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED) {
+        btStop();
+        delay(1000);
+        Serial.println("[测试] ✅ 蓝牙关闭完成");
+    } else {
+        Serial.println("[测试] 蓝牙未启用，跳过");
+    }
+    
+    // 配置唤醒源
+    Serial.println("[测试] 配置唤醒源...");
+    esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL);
+    esp_sleep_enable_timer_wakeup(10 * 1000000ULL); // 10秒后唤醒
+    Serial.println("[测试] ✅ 定时器唤醒已配置（10秒）");
+    
+    // 最后的准备
+    Serial.println("[测试] 最后准备...");
+    Serial.flush();
+    delay(1000);
+    
+    Serial.println("[测试] 💤 进入深度睡眠（10秒后自动唤醒）");
+    Serial.flush();
+    
+    // 进入深度睡眠
+    esp_deep_sleep_start();
 }
 
 #ifdef RTC_INT_PIN
