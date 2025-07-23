@@ -91,6 +91,60 @@ const char WIFI_CONFIG_PAGE_HTML[] PROGMEM = R"rawliteral(
             padding: 2px 8px;
             font-size: 13px;
         }
+        /* 快捷按钮样式 */
+        .shortcut-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .shortcut-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: #007bff;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .shortcut-btn:hover {
+            background: #0056b3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .shortcut-btn:active {
+            transform: translateY(0);
+        }
+        .shortcut-btn.cancel {
+            background: #dc3545;
+        }
+        .shortcut-btn.cancel:hover {
+            background: #c82333;
+        }
+        /* 工具提示 */
+        .shortcut-btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            z-index: 1000;
+        }
     </style>
     <script>
     // 动态获取热点列表并填充 datalist
@@ -138,6 +192,48 @@ const char WIFI_CONFIG_PAGE_HTML[] PROGMEM = R"rawliteral(
                 alert('已退出配网模式，设备将尝试连接WiFi');
             });
     }
+    
+    // 快捷按钮功能
+    function submitForm() {
+        const form = document.querySelector('form');
+        const ssid = form.ssid.value.trim();
+        const password = form.password.value.trim();
+        
+        if (!ssid) {
+            alert('请输入WiFi名称');
+            form.ssid.focus();
+            return;
+        }
+        if (!password) {
+            alert('请输入WiFi密码');
+            form.password.focus();
+            return;
+        }
+        
+        form.submit();
+    }
+    
+    function cancelForm() {
+        const form = document.querySelector('form');
+        form.ssid.value = '';
+        form.password.value = '';
+        form.ssid.focus();
+    }
+    
+    // 键盘快捷键支持
+    document.addEventListener('keydown', function(e) {
+        // Ctrl+Enter 或 Cmd+Enter 提交表单
+        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            submitForm();
+        }
+        // Esc 键清空表单
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            cancelForm();
+        }
+    });
+    
     window.onload = function() {
         fetchWifiList();
         renderSavedWifi();
@@ -156,6 +252,17 @@ const char WIFI_CONFIG_PAGE_HTML[] PROGMEM = R"rawliteral(
             <input list='wifi-list' name='ssid' placeholder='选择或输入WiFi名称' required>
             <datalist id='wifi-list'></datalist>
             <input type='password' name='password' placeholder='请输入WiFi密码' required>
+            
+            <!-- 快捷按钮 -->
+            <div class="shortcut-buttons">
+                <button type="button" class="shortcut-btn" onclick="submitForm()" title="提交 (Ctrl+Enter)">
+                    ↵
+                </button>
+                <button type="button" class="shortcut-btn cancel" onclick="cancelForm()" title="清空 (Esc)">
+                    ✕
+                </button>
+            </div>
+            
             <button type='submit'>连接网络</button>
         </form>
         <button type="button" onclick="exitConfig()" style="margin-top:15px;background:#dc3545;">退出配网模式</button>
