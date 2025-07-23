@@ -7,6 +7,7 @@
 #include "esp_task_wdt.h"
 #include "SD.h"
 #include "SPI.h"
+#include "audio/AudioManager.h"
 
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -189,6 +190,12 @@ void PowerManager::enterLowPowerMode()
     
     // 配置电源域
     configurePowerDomains();
+    
+    // 播放休眠音效
+    Serial.println("[电源管理] 🔊 播放休眠音效...");
+    extern AudioManager audioManager;
+    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
+    delay(1000); // 等待音效播放完成
     
     Serial.println("[电源管理] 💤 进入深度睡眠");
     Serial.flush();
@@ -486,6 +493,12 @@ void PowerManager::testSafeEnterSleep()
     Serial.println("[测试] 最后准备...");
     Serial.flush();
     delay(1000);
+    
+    // 播放休眠音效
+    Serial.println("[测试] 🔊 播放休眠音效...");
+    extern AudioManager audioManager;
+    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
+    delay(1000); // 等待音效播放完成
     
     Serial.println("[测试] 💤 进入深度睡眠（10秒后自动唤醒）");
     Serial.flush();
