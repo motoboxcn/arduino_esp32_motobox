@@ -19,6 +19,8 @@
 #include "Air780EG.h"
 #include "utils/serialCommand.h"
 #include "ota/SDCardOTA.h"
+#include "SD/SDManager.h"
+#include "SD/GPSLogger.h"
 
 #ifdef BAT_PIN
 #include "bat/BAT.h"
@@ -64,6 +66,7 @@ extern Ml307AtModem ml307_at;
 
 #ifdef ENABLE_GPS_LOGGER
 #include "SD/GPSLogger.h"
+extern GPSLogger gpsLogger;
 #endif
 
 #ifdef ENABLE_AUDIO
@@ -90,16 +93,6 @@ extern Ml307AtModem ml307_at;
 
 // RTC内存变量（深度睡眠后保持）
 RTC_DATA_ATTR int bootCount = 0;
-
-#ifdef ENABLE_SDCARD
-// SD卡管理器
-SDManager sdManager;
-#endif
-
-#ifdef ENABLE_GPS_LOGGER
-// GPS记录器
-GPSLogger gpsLogger(&sdManager);
-#endif
 
 /**
  * 系统监控任务

@@ -4,11 +4,12 @@
 #include "config.h"
 
 #ifdef ENABLE_GPS_LOGGER
-
+#include "SD/SDManager.h"
 #include "SDManager.h"
 #include <ArduinoJson.h>
 #include "Air780EG.h"
 #include "Air780EGGNSS.h"
+
 
 // 使用Air780EG的GPS数据结构
 // 不需要重新定义GPSData，直接使用gnss_data_t

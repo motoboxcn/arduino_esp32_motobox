@@ -2,8 +2,11 @@
 
 #ifdef ENABLE_GPS_LOGGER
 
+extern SDManager sdManager;
+GPSLogger gpsLogger(&sdManager);
+
 GPSLogger::GPSLogger(SDManager* manager) : 
-    sdManager(manager), 
+    sdManager(manager),
     isFirstRecord(true), 
     sessionStartTime(0),
     recordCount(0),
