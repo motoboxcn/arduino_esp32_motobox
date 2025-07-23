@@ -112,6 +112,8 @@
 // 融合定位功能
 #define ENABLE_FUSION_LOCATION
 
+#define AT_DEBUG_ENABLED true
+
 // 融合定位配置
 #ifdef ENABLE_FUSION_LOCATION
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）

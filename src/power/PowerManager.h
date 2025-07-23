@@ -49,6 +49,7 @@ private:
     bool isDeviceIdle();          // 检查设备是否空闲
     bool configureWakeupSources(); // 配置唤醒源
     void disablePeripherals();    // 关闭外设
+    void configureGPIOForSleep(); // 配置GPIO低功耗模式
     void handleWakeup();          // 处理唤醒事件
     void configurePowerDomains(); // 配置电源域
     

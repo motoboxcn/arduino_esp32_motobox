@@ -12,6 +12,7 @@ public:
 
     PWMLED(uint8_t pin);
     void begin();
+    void deinit();  // 添加反初始化方法
     void loop();
     void setMode(LEDMode mode);
     void setColor(LEDColor color);

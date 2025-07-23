@@ -511,9 +511,14 @@ void FusionLocationManager::printStats() {
   "data_valid": false
 }*/
 String FusionLocationManager::getPositionJSON() {
-    Position pos = getFusedPosition();
-    DataSourceStatus status = getDataSourceStatus();
+   
 
+    Position pos = getFusedPosition();
+    if (!initialized || pos.lat==39.9042 || pos.lng==116.4074) {
+        return "{}";
+    }
+
+    DataSourceStatus status = getDataSourceStatus();
     String json = "{";
     json += "\"latitude\":" + String(pos.lat, 6) + ",";
     json += "\"longitude\":" + String(pos.lng, 6) + ",";
@@ -587,7 +592,7 @@ void FusionLocationManager::handleFallbackLocation() {
     
     // 检查GNSS信号是否丢失
     if (isGNSSSignalLost()) {
-        debugPrint("GNSS信号丢失，启动兜底定位策略");
+        // debugPrint("GNSS信号丢失，启动兜底定位策略");
         
         // 根据配置决定使用WiFi还是LBS
         if (fallbackConfig.prefer_wifi_over_lbs) {

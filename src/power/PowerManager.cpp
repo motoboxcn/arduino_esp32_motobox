@@ -1,8 +1,21 @@
 #include "PowerManager.h"
 #include "esp_wifi.h"
 #include "driver/adc.h"
+#include "driver/gpio.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
+
+#ifdef USE_AIR780EG_GSM
+#include "Air780EG.h"
+#endif
+
+#ifdef ENABLE_LED
+#include "led/PWMLED.h"
+#endif
+
+#ifdef ENABLE_SDCARD
+#include "SD/SDManager.h"
+#endif
 
 // 初始化静态变量
 #ifdef ENABLE_SLEEP
@@ -225,31 +238,114 @@ void PowerManager::disablePeripherals()
 {
     Serial.println("[电源管理] 关闭外设...");
     
-    // 关闭WiFi和蓝牙
+    // 1. 关闭 Air780EG 模块（最大功耗外设）
+    #ifdef USE_AIR780EG_GSM
+    extern Air780EG air780eg;
+    Serial.println("[电源管理] 关闭 Air780EG 模块...");
+    air780eg.powerOff();
+    delay(1000); // 等待模块完全关闭
+    #endif
+    
+    // 2. 关闭WiFi和蓝牙
+    Serial.println("[电源管理] 关闭 WiFi 和蓝牙...");
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
+    esp_wifi_deinit();
     btStop();
-
-    // 关闭 LED 
-    pwmLed.setBrightness(0);
+    esp_bt_controller_disable();
+    esp_bt_controller_deinit();
     
-    // 关闭串口（除了调试串口）
+    // 3. 关闭 LED 和 PWM
+    Serial.println("[电源管理] 关闭 LED...");
+    #ifdef ENABLE_LED
+    extern PWMLED pwmLed;
+    pwmLed.setBrightness(0);
+    pwmLed.deinit(); // 完全关闭PWM
+    #endif
+    
+    // 4. 关闭 SD 卡
+    #ifdef ENABLE_SDCARD
+    Serial.println("[电源管理] 关闭 SD 卡...");
+    extern SDManager sdManager;
+    sdManager.end();
+    #endif
+    
+    // 5. 关闭 TFT 显示屏
+    #ifdef ENABLE_TFT
+    Serial.println("[电源管理] 关闭 TFT 显示屏...");
+    // 添加 TFT 关闭代码
+    #endif
+    
+    // 6. 关闭串口（除了调试串口）
     #ifdef GPS_RX_PIN
     Serial2.end();
     #endif
     
-    Serial.println("[电源管理] 外设已关闭");
+    // 7. 关闭 ADC
+    Serial.println("[电源管理] 关闭 ADC...");
+    adc_power_release();
+    
+    // 8. 关闭不必要的 GPIO 上拉
+    Serial.println("[电源管理] 配置 GPIO 低功耗模式...");
+    configureGPIOForSleep();
+    
+    Serial.println("[电源管理] ✅ 所有外设已关闭");
     Serial.flush();
     delay(100);
 }
 
 void PowerManager::configurePowerDomains()
 {
+    Serial.println("[电源管理] 配置电源域...");
     // 配置电源域以最大化省电
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_SLOW_MEM, ESP_PD_OPTION_ON);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_FAST_MEM, ESP_PD_OPTION_OFF);
     esp_sleep_pd_config(ESP_PD_DOMAIN_XTAL, ESP_PD_OPTION_OFF);
+    
+    // 关闭不必要的电源域
+    esp_sleep_pd_config(ESP_PD_DOMAIN_VDDSDIO, ESP_PD_OPTION_OFF);
+    Serial.println("[电源管理] ✅ 电源域配置完成");
+}
+
+void PowerManager::configureGPIOForSleep()
+{
+    Serial.println("[电源管理] 配置 GPIO 低功耗模式...");
+    
+    // 配置所有未使用的 GPIO 为输入模式，禁用上拉下拉
+    for (int gpio = 0; gpio <= 48; gpio++) {
+        // 跳过特殊引脚
+        if (gpio == 1 || gpio == 3) continue;  // UART0 TX/RX
+        if (gpio == 19 || gpio == 20) continue; // USB D-/D+
+        if (gpio == 43 || gpio == 44) continue; // UART0 TX/RX (ESP32-S3)
+        
+        // 跳过正在使用的引脚
+        #ifdef IMU_INT_PIN
+        if (gpio == IMU_INT_PIN) continue;
+        #endif
+        #ifdef RTC_INT_PIN
+        if (gpio == RTC_INT_PIN) continue;
+        #endif
+        #ifdef BAT_PIN
+        if (gpio == BAT_PIN) continue;
+        #endif
+        #ifdef CHARGING_STATUS_PIN
+        if (gpio == CHARGING_STATUS_PIN) continue;
+        #endif
+        
+        // 检查是否为有效的 GPIO
+        if (GPIO_IS_VALID_GPIO(gpio)) {
+            gpio_config_t io_conf = {};
+            io_conf.intr_type = GPIO_INTR_DISABLE;
+            io_conf.mode = GPIO_MODE_INPUT;
+            io_conf.pin_bit_mask = (1ULL << gpio);
+            io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+            io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+            gpio_config(&io_conf);
+        }
+    }
+    
+    Serial.println("[电源管理] ✅ GPIO 低功耗配置完成");
 }
 
 #ifdef RTC_INT_PIN

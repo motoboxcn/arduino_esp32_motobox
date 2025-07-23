@@ -41,6 +41,18 @@ void PWMLED::begin() {
     Serial.printf("[PWMLED] 初始化完成，引脚: %d\n", _pin);
 }
 
+void PWMLED::deinit() {
+    // 关闭所有LED
+    setBrightness(0);
+    _mode = LED_OFF;
+    
+    // 清除FastLED配置
+    FastLED.clear();
+    FastLED.show();
+    
+    Serial.printf("[PWMLED] 反初始化完成，引脚: %d\n", _pin);
+}
+
 void PWMLED::initRainbow() {
     _rainbowIndex = 0;
     _lastUpdate = millis();

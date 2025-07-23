@@ -364,6 +364,15 @@ void setup()
   {
     Serial.println("[融合定位] ❌ 融合定位系统初始化失败");
   }
+  // 配置兜底定位 - 测试用的短间隔
+  fusionLocationManager.configureFallbackLocation(
+    true,      // 启用兜底定位
+    15000,     // GNSS信号丢失超时时间 15秒（测试用）
+    60000,     // LBS定位间隔 1分钟（测试用）
+    45000,     // WiFi定位间隔 45秒（测试用）
+    true       // 优先使用WiFi定位
+);
+
 #endif
   //================ 融合定位初始化结束 ================
 
@@ -418,8 +427,7 @@ void loop()
       Position pos = fusionLocationManager.getFusedPosition();
       if (pos.valid)
       {
-        Serial.printf("[融合定位] 位置: %.6f, %.6f | 精度: %.1fm | 航向: %.1f°\n",
-                      pos.lat, pos.lng, pos.accuracy, pos.heading);
+        fusionLocationManager.printStats();
       }
     }
 #endif
