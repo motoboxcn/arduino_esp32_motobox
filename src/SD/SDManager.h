@@ -144,4 +144,6 @@ private:
 #endif // ENABLE_SDCARD
 };
 
+extern SDManager sdManager;
+
 #endif // SDMANAGER_H

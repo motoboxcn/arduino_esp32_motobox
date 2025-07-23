@@ -530,7 +530,7 @@ String FusionLocationManager::getPositionJSON() {
     json += "\"location_type\":\"FUSION_LOCATION\",";
     json += "\"satellites\":" + String(status.gps_available ? air780eg.getGNSS().gnss_data.satellites : 0) + ",";
     json += "\"is_fixed\":" + String(status.gps_available ? "true" : "false") + ",";
-    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false") + ",";
+    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false");
     json += "}";
     return json;
 }

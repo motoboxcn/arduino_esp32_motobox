@@ -12,7 +12,9 @@ enum PromptType {
     PROMPT_UPGRADE_START,
     PROMPT_UPGRADE_PROGRESS,
     PROMPT_UPGRADE_SUCCESS,
-    PROMPT_UPGRADE_FAILED
+    PROMPT_UPGRADE_FAILED,
+    PROMPT_SLEEP_ENTER,     // 进入休眠提示音
+    PROMPT_SLEEP_EXIT       // 退出休眠提示音
 };
 
 class VoicePrompt {

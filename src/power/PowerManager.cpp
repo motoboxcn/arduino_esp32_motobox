@@ -320,7 +320,6 @@ void PowerManager::disablePeripherals()
     // 4. 安全关闭 SD 卡
     #ifdef ENABLE_SDCARD
     Serial.println("[电源管理] 关闭 SD 卡...");
-    extern SDManager sdManager;
     // 检查 SD 卡是否已初始化
     if (sdManager.isInitialized()) {
         sdManager.end();

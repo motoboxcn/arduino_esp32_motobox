@@ -2,6 +2,8 @@
 
 #ifdef ENABLE_SDCARD
 
+SDManager sdManager;
+
 SDManager::SDManager() : _initialized(false) {}
 
 SDManager::~SDManager() {
