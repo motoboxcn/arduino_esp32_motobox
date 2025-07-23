@@ -4,6 +4,7 @@
 #include "driver/gpio.h"
 #include "esp_bt.h"
 #include "esp_bt_main.h"
+#include "esp_task_wdt.h"
 
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -167,6 +168,9 @@ void PowerManager::enterLowPowerMode()
     Serial.println("[电源管理] 进入低功耗模式...");
     powerState = POWER_STATE_PREPARING_SLEEP;
     
+    // 重置看门狗，给足够时间完成休眠准备
+    esp_task_wdt_reset();
+    
     // 配置唤醒源
     if (!configureWakeupSources()) {
         Serial.println("[电源管理] 唤醒源配置失败");
@@ -174,8 +178,12 @@ void PowerManager::enterLowPowerMode()
         return;
     }
     
+    esp_task_wdt_reset(); // 再次喂狗
+    
     // 关闭外设
     disablePeripherals();
+    
+    esp_task_wdt_reset(); // 外设关闭后喂狗
     
     // 配置电源域
     configurePowerDomains();
@@ -183,6 +191,9 @@ void PowerManager::enterLowPowerMode()
     Serial.println("[电源管理] 💤 进入深度睡眠");
     Serial.flush();
     delay(100);
+    
+    // 最后一次喂狗，然后进入深度睡眠
+    esp_task_wdt_reset();
     
     // 进入深度睡眠
     esp_deep_sleep_start();
@@ -243,9 +254,17 @@ void PowerManager::disablePeripherals()
     Serial.println("[电源管理] 关闭 Air780EG 模块...");
     extern Air780EG air780eg;
     if (air780eg.isInitialized()) {
+        // 设置较短的超时时间，避免长时间等待
+        unsigned long start_time = millis();
         air780eg.powerOff();
+        
+        // 等待关闭，但不超过3秒
+        while (millis() - start_time < 3000) {
+            esp_task_wdt_reset(); // 喂狗
+            delay(100);
+        }
+        
         Serial.println("[电源管理] ✅ Air780EG 模块已关闭");
-        delay(1000); // 等待模块完全关闭
     } else {
         Serial.println("[电源管理] Air780EG 未初始化，跳过关闭");
     }
@@ -253,12 +272,37 @@ void PowerManager::disablePeripherals()
     
     // 2. 关闭WiFi和蓝牙
     Serial.println("[电源管理] 关闭 WiFi 和蓝牙...");
+    
+    // 安全关闭 WiFi
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-    esp_wifi_deinit();
-    btStop();
-    esp_bt_controller_disable();
-    esp_bt_controller_deinit();
+    delay(500);
+    esp_task_wdt_reset(); // 喂狗
+    
+    // 尝试反初始化 WiFi，如果失败就跳过
+    esp_err_t wifi_err = esp_wifi_deinit();
+    if (wifi_err != ESP_OK) {
+        Serial.printf("[电源管理] WiFi 反初始化失败 (0x%x)，继续执行\n", wifi_err);
+    } else {
+        Serial.println("[电源管理] ✅ WiFi 完全关闭");
+    }
+    
+    // 安全关闭蓝牙
+    if (esp_bt_controller_get_status() == ESP_BT_CONTROLLER_STATUS_ENABLED) {
+        btStop();
+        delay(500);
+        esp_task_wdt_reset(); // 喂狗
+        
+        esp_err_t bt_err = esp_bt_controller_disable();
+        if (bt_err == ESP_OK) {
+            esp_bt_controller_deinit();
+            Serial.println("[电源管理] ✅ 蓝牙完全关闭");
+        } else {
+            Serial.printf("[电源管理] 蓝牙关闭失败 (0x%x)，继续执行\n", bt_err);
+        }
+    } else {
+        Serial.println("[电源管理] 蓝牙未启用，跳过关闭");
+    }
     
     // 3. 关闭 LED 和 PWM
     Serial.println("[电源管理] 关闭 LED...");
@@ -330,12 +374,15 @@ void PowerManager::configureGPIOForSleep()
 {
     Serial.println("[电源管理] 配置 GPIO 低功耗模式...");
     
-    // 配置所有未使用的 GPIO 为输入模式，禁用上拉下拉
-    for (int gpio = 0; gpio <= 48; gpio++) {
-        // 跳过特殊引脚
-        if (gpio == 1 || gpio == 3) continue;  // UART0 TX/RX
-        if (gpio == 19 || gpio == 20) continue; // USB D-/D+
-        if (gpio == 43 || gpio == 44) continue; // UART0 TX/RX (ESP32-S3)
+    // 喂狗，防止看门狗重启
+    esp_task_wdt_reset();
+    
+    // 只配置关键的未使用 GPIO，避免配置过多导致超时
+    const int unused_gpios[] = {0, 2, 4, 5, 12, 13, 14, 15, 17, 18, 19, 27, 32, 35};
+    const int num_unused = sizeof(unused_gpios) / sizeof(unused_gpios[0]);
+    
+    for (int i = 0; i < num_unused; i++) {
+        int gpio = unused_gpios[i];
         
         // 跳过正在使用的引脚
         #ifdef IMU_INT_PIN
@@ -350,6 +397,9 @@ void PowerManager::configureGPIOForSleep()
         #ifdef CHARGING_STATUS_PIN
         if (gpio == CHARGING_STATUS_PIN) continue;
         #endif
+        #ifdef PWM_LED_PIN
+        if (gpio == PWM_LED_PIN) continue;
+        #endif
         
         // 检查是否为有效的 GPIO
         if (GPIO_IS_VALID_GPIO(gpio)) {
@@ -360,6 +410,12 @@ void PowerManager::configureGPIOForSleep()
             io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
             io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
             gpio_config(&io_conf);
+        }
+        
+        // 每配置几个 GPIO 就喂一次狗
+        if (i % 5 == 0) {
+            esp_task_wdt_reset();
+            delay(10);
         }
     }
     
