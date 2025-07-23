@@ -5,6 +5,8 @@
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_task_wdt.h"
+#include "SD.h"
+#include "SPI.h"
 
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -249,6 +251,9 @@ void PowerManager::disablePeripherals()
 {
     Serial.println("[电源管理] 关闭外设...");
     
+    // 1. 关闭SD卡 - 最重要的功耗优化
+    disableSDCard();
+    
     // 1. 关闭 Air780EG 模块（最大功耗外设）
     #ifdef USE_AIR780EG_GSM
     Serial.println("[电源管理] 关闭 Air780EG 模块...");
@@ -325,13 +330,25 @@ void PowerManager::disablePeripherals()
     }
     #endif
     
-    // 5. 关闭 TFT 显示屏
+    // 5. 关闭 TFT 显示屏（可能是高功耗源）
     #ifdef ENABLE_TFT
     Serial.println("[电源管理] 关闭 TFT 显示屏...");
-    // 添加 TFT 关闭代码
+    // 关闭显示屏背光和电源
+    // 注意：这里需要根据具体的 TFT 驱动添加关闭代码
+    // 例如：tft.writecommand(0x28); // Display OFF
+    //      tft.writecommand(0x10); // Sleep IN
+    Serial.println("[电源管理] ⚠️  TFT 关闭代码需要根据具体驱动实现");
     #endif
     
-    // 6. 关闭串口（除了调试串口）
+    // 6. 关闭音频模块（可能是高功耗源）
+    #ifdef ENABLE_AUDIO
+    Serial.println("[电源管理] 关闭音频模块...");
+    // 关闭音频放大器和相关电路
+    // 需要在 AudioManager 中实现 powerOff() 方法
+    Serial.println("[电源管理] ⚠️  音频模块关闭代码需要实现");
+    #endif
+    
+    // 7. 关闭串口（除了调试串口）
     #ifdef GPS_RX_PIN
     Serial2.end();
     #endif
@@ -507,3 +524,75 @@ void PowerManager::handleVehicleStateChange()
     }
 }
 #endif
+
+void PowerManager::disableSDCard()
+{
+    Serial.println("[电源管理] 关闭SD卡...");
+    
+    // 1. 卸载SD卡文件系统
+    SD.end();
+    Serial.println("[电源管理] SD卡文件系统已卸载");
+    
+    // 2. 关闭SPI总线
+    SPI.end();
+    Serial.println("[电源管理] SPI总线已关闭");
+    
+    // 3. 配置SD卡相关GPIO为低功耗模式
+    // 根据你的原理图，SD卡使用的引脚：
+    const int SD_PINS[] = {
+        2,   // SD_D0 (MISO)
+        14,  // SD_CLK (SCK) 
+        15,  // SD_CMD (MOSI)
+        13,  // SD_D3 (CS)
+        // 如果使用4线模式，还有：
+        // 4,   // SD_D1
+        // 12,  // SD_D2
+    };
+    
+    for (int pin : SD_PINS) {
+        // 配置为输入，禁用上下拉
+        gpio_config_t io_conf = {};
+        io_conf.intr_type = GPIO_INTR_DISABLE;
+        io_conf.mode = GPIO_MODE_INPUT;
+        io_conf.pin_bit_mask = (1ULL << pin);
+        io_conf.pull_down_en = GPIO_PULLDOWN_DISABLE;
+        io_conf.pull_up_en = GPIO_PULLUP_DISABLE;
+        gpio_config(&io_conf);
+        
+        // 设置为低电平（如果可能）
+        gpio_set_level((gpio_num_t)pin, 0);
+    }
+    
+    // 4. 关闭SD卡电源（如果有控制引脚）
+    // 注意：你的原理图显示SD卡直接连接3.3V，无法软件控制断电
+    // 如果有SD_PWR_EN引脚，可以在这里关闭：
+    // gpio_set_level(SD_PWR_EN, 0);
+    
+    Serial.println("[电源管理] ✅ SD卡低功耗配置完成");
+    
+    // 5. 延时确保配置生效
+    delay(100);
+}
+
+void PowerManager::enableSDCard()
+{
+    Serial.println("[电源管理] 重新启用SD卡...");
+    
+    // 1. 重新配置SD卡引脚
+    const int SD_PINS[] = {2, 14, 15, 13};
+    
+    for (int pin : SD_PINS) {
+        // 恢复为默认配置
+        gpio_reset_pin((gpio_num_t)pin);
+    }
+    
+    // 2. 重新初始化SPI
+    SPI.begin();
+    
+    // 3. 重新挂载SD卡
+    if (SD.begin()) {
+        Serial.println("[电源管理] ✅ SD卡重新初始化成功");
+    } else {
+        Serial.println("[电源管理] ❌ SD卡重新初始化失败");
+    }
+}

@@ -40,6 +40,10 @@ public:
     
     // 唤醒处理
     void printWakeupReason();
+    
+    // SD卡低功耗管理
+    void disableSDCard();         // 关闭SD卡并配置低功耗
+    void enableSDCard();          // 重新启用SD卡
 
 private:
     PowerState powerState;        // 当前电源状态

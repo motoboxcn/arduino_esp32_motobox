@@ -17,6 +17,59 @@ void PowerDiagnostics::printCurrentConsumption() {
     analyzePeripheralPower();
     checkPeripheralStates();
     printGPIOStates();
+    
+    // 新增：详细的硬件功耗分析
+    printHardwarePowerAnalysis();
+}
+
+void PowerDiagnostics::printHardwarePowerAnalysis() {
+    Serial.println("\n--- 硬件功耗详细分析 ---");
+    
+    Serial.println("🔋 ESP32-S3 功耗分析:");
+    Serial.println("  - CPU (240MHz): ~5-10mA");
+    Serial.println("  - WiFi 关闭: ~0mA");
+    Serial.println("  - 蓝牙关闭: ~0mA");
+    Serial.println("  - 深度睡眠理论值: <1mA");
+    
+    Serial.println("\n🔌 外设功耗估算:");
+    
+    // TFT 显示屏
+    #ifdef ENABLE_TFT
+    Serial.println("  - TFT 显示屏: ~20-50mA (可能未完全关闭)");
+    #endif
+    
+    // LED
+    #ifdef PWM_LED_PIN
+    Serial.println("  - PWM LED: ~1-5mA");
+    #endif
+    
+    // SD 卡
+    #ifdef ENABLE_SDCARD
+    Serial.println("  - SD 卡: ~5-15mA (如果未正确断电)");
+    #endif
+    
+    // IMU 传感器
+    #ifdef ENABLE_IMU
+    Serial.println("  - IMU 传感器: ~0.5-2mA");
+    #endif
+    
+    // 音频模块
+    #ifdef ENABLE_AUDIO
+    Serial.println("  - 音频模块: ~5-20mA (如果未关闭)");
+    #endif
+    
+    Serial.println("\n⚠️  可能的高功耗源:");
+    Serial.println("  1. TFT 显示屏背光或驱动未关闭");
+    Serial.println("  2. 音频放大器未断电");
+    Serial.println("  3. SD 卡未正确进入低功耗模式");
+    Serial.println("  4. 外部上拉电阻导致的漏电流");
+    Serial.println("  5. GPIO 配置不当导致的电流泄漏");
+    
+    Serial.println("\n🔧 建议排查步骤:");
+    Serial.println("  1. 物理断开 TFT 显示屏连接");
+    Serial.println("  2. 断开 SD 卡连接");
+    Serial.println("  3. 断开音频模块连接");
+    Serial.println("  4. 逐个断开外设，定位功耗源");
 }
 
 void PowerDiagnostics::analyzePeripheralPower() {
