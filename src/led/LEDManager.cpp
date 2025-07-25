@@ -61,6 +61,16 @@ void LEDManager::updateChargingStatus() {
         Serial.printf("[LEDManager] 充电状态变化: %s\n", 
                      currentChargingState ? "充电中" : "未充电");
     }
+    
+    // 添加调试信息
+    static unsigned long lastDebugTime = 0;
+    if (millis() - lastDebugTime > 5000) { // 每5秒输出一次调试信息
+        Serial.printf("[LEDManager] 调试信息 - 充电状态: %s, 自动模式: %s, LED模式: %d, 亮度: %d\n",
+                     currentChargingState ? "充电中" : "未充电",
+                     _autoChargingMode ? "启用" : "禁用",
+                     _mode, _brightness);
+        lastDebugTime = millis();
+    }
 }
 
 void LEDManager::setChargingDisplay(bool isCharging) {
