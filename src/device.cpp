@@ -404,14 +404,13 @@ void update_device_state()
                             String(device_state.battery_percentage).c_str());
         state_changes.battery_changed = true;
 
-        if (device_state.battery_percentage <= 20)
+        // LED显示现在由LEDManager根据充电状态自动处理
+        // 只有在电池电量极低时才显示红色警告
+        if (device_state.battery_percentage <= 10)
         {
-            ledManager.setLEDState(LED_ON, LED_COLOR_RED, 5);
+            ledManager.setLEDState(LED_BLINK_FAST, LED_COLOR_RED, 20);
         }
-        else
-        {
-            ledManager.setLEDState(LED_BREATH, LED_COLOR_GREEN, 5);
-        }
+        // 其他情况让LEDManager自动处理充电状态显示
 
 #ifdef ENABLE_AUDIO
         // 当电池电量降到20%以下时播放低电量警告音（避免频繁播放）
@@ -596,7 +595,7 @@ bool Device::initializeMQTT()
 
     // 添加定时任务
     air780eg.getMQTT().addScheduledTask("device_status", "vehicle/v1/" + device_state.device_id + "/telemetry/device", getDeviceStatusJSON, 30000, 0, false);
-    air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, 1000, 0, false);
+    air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, 2000, 0, false);
     // air780eg.getMQTT().addScheduledTask("system_stats", mqttTopics.getSystemStatusTopic(), getSystemStatsJSON, 60, 0, false);
 
     // // 连接到MQTT服务器
