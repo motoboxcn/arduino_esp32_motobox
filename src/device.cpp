@@ -538,7 +538,7 @@ void Device::initializeGSM()
     Serial.println("[GSM] 初始化Air780EG模块...");
     Serial.printf("[GSM] 引脚配置 - RX:%d, TX:%d, EN:%d\n", GSM_RX_PIN, GSM_TX_PIN, GSM_EN);
     // 设置日志级别 (可选)
-#ifdef AT_DEBUG_ENABLED
+#ifdef AIR780EG_LOG_VERBOSE_ENABLED
     Air780EG::setLogLevel(AIR780EG_LOG_VERBOSE);
 #else
     Air780EG::setLogLevel(AIR780EG_LOG_INFO);
@@ -594,8 +594,8 @@ bool Device::initializeMQTT()
     air780eg.getMQTT().setConnectionCallback(mqttConnectionCallback);
 
     // 添加定时任务
-    air780eg.getMQTT().addScheduledTask("device_status", "vehicle/v1/" + device_state.device_id + "/telemetry/device", getDeviceStatusJSON, 30000, 0, false);
-    air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, 2000, 0, false);
+    air780eg.getMQTT().addScheduledTask("device_status", "vehicle/v1/" + device_state.device_id + "/telemetry/device", getDeviceStatusJSON, MQTT_DEVICE_STATUS_PUBLISH_INTERVAL, 0, false);
+    air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, MQTT_GPS_PUBLISH_INTERVAL, 0, false);
     // air780eg.getMQTT().addScheduledTask("system_stats", mqttTopics.getSystemStatusTopic(), getSystemStatsJSON, 60, 0, false);
 
     // // 连接到MQTT服务器

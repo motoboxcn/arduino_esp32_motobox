@@ -261,6 +261,8 @@ bool AudioManager::playAudioEvent(AudioEvent event) {
             return playBootSuccessSound();
         case AUDIO_EVENT_WIFI_CONNECTED:
             return playWiFiConnectedSound();
+        case AUDIO_EVENT_WIFI_DISCONNECTED:
+            return playWiFiConnectedSound();
         case AUDIO_EVENT_GPS_FIXED:
             return playGPSFixedSound();
         case AUDIO_EVENT_LOW_BATTERY:

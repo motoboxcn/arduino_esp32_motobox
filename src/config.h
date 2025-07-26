@@ -54,6 +54,7 @@
 #define AIR780EG_TIMEOUT             5000
 #define AIR780EG_GNSS_UPDATE_RATE    1000  // 1Hz
 #define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
+#define AIR780EG_LOG_VERBOSE_ENABLED
 
 // MQTT配置
 #define MQTT_BROKER                  "222.186.32.152"
@@ -63,6 +64,8 @@
 #define MQTT_PASSWORD                "box"
 #define MQTT_KEEPALIVE               60
 #define MQTT_RECONNECT_INTERVAL      30000
+#define MQTT_GPS_PUBLISH_INTERVAL     5000 // 5秒上报一次
+#define MQTT_DEVICE_STATUS_PUBLISH_INTERVAL 30000 // 30秒上报一次
 
 // GPS配置
 #define GPS_UPDATE_INTERVAL          1000
@@ -101,29 +104,26 @@
 #define GPS_SPEED_PRECISION          2       // 速度精度
 #define GPS_MIN_FREE_SPACE_MB        50      // 最小可用空间（MB）
 #define GPS_AUTO_CLEANUP_DAYS        30      // 自动清理天数
-
-#ifdef DEBUG
-#define GPS_DEBUG_ENABLED            true
-#else
-#define GPS_DEBUG_ENABLED            false
+#define GPS_LOGGER_DEBUG_ENABLED      false
 #endif
-#endif // ENABLE_GPS_LOGGER
 
 // 融合定位功能
 #define ENABLE_FUSION_LOCATION
+#define FUSION_EKF_VEHICLE_ENABLED    true
 
-#define AT_DEBUG_ENABLED true
+
+// #define AT_DEBUG_ENABLED
 
 // 融合定位配置
 #ifdef ENABLE_FUSION_LOCATION
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）
-#define FUSION_LOCATION_DEBUG_ENABLED    false    // 调试输出
+#define FUSION_LOCATION_DEBUG_ENABLED    false     // 调试输出
 #define FUSION_LOCATION_INITIAL_LAT      39.9042 // 默认初始纬度（北京）
 #define FUSION_LOCATION_INITIAL_LNG      116.4074// 默认初始经度（北京）
 #define FUSION_LOCATION_PRINT_INTERVAL   5000    // 状态打印间隔（毫秒）
 
 // EKF算法配置
-#define FUSION_USE_EKF_DEFAULT           true    // 默认使用EKF算法
+#define FUSION_USE_EKF_DEFAULT           false    // 默认使用EKF算法
 #define FUSION_EKF_PROCESS_NOISE_POS     0.8f    // 位置过程噪声（摩托车）
 #define FUSION_EKF_PROCESS_NOISE_VEL     3.0f    // 速度过程噪声
 #define FUSION_EKF_PROCESS_NOISE_HEADING 0.1f    // 航向过程噪声

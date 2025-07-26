@@ -21,9 +21,8 @@ public:
 private:
     static const uint8_t NUM_LEDS = 1;
     static const uint8_t DEFAULT_BRIGHTNESS = 10;
-    static const uint8_t MAX_BRIGHTNESS = 255;
     static const uint8_t BREATH_STEP = 5;
-    static const unsigned long BREATH_INTERVAL = 20;
+    static const unsigned long BREATH_INTERVAL = 100; // 呼吸灯间隔 调大变慢
     static const unsigned long BLINK_SLOW_INTERVAL = 1000;
     static const unsigned long BLINK_FAST_INTERVAL = 200;
 

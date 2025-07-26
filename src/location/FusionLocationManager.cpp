@@ -25,11 +25,11 @@ bool MotoBoxIMUProvider::getData(IMUData& data) {
     data.valid = true;
     last_update_time = data.timestamp;
     
-    if (debug_enabled) {
-        Serial.printf("[IMU] IMU数据: 加速度(%.2f,%.2f,%.2f) 陀螺仪(%.3f,%.3f,%.3f)\n", 
-                     data.accel[0], data.accel[1], data.accel[2],
-                     data.gyro[0], data.gyro[1], data.gyro[2]);
-    }
+    // if (debug_enabled) {
+    //     Serial.printf("[IMU] IMU数据: 加速度(%.2f,%.2f,%.2f) 陀螺仪(%.3f,%.3f,%.3f)\n", 
+    //                  data.accel[0], data.accel[1], data.accel[2],
+    //                  data.gyro[0], data.gyro[1], data.gyro[2]);
+    // }
     
     return true;
 #else
@@ -246,18 +246,20 @@ void FusionLocationManager::loop() {
         }
     }
     
-    // 状态统计和调试信息保持低频更新
-    if (currentTime - last_update_time >= update_interval) {
+    // 状态统计和兜底定位逻辑 - 独立于算法更新间隔
+    // 这样确保所有算法都能正常使用备用定位方案
+    static unsigned long last_stats_update = 0;
+    if (currentTime - last_stats_update >= update_interval) {
         // 获取融合位置并更新统计
         Position pos = getFusedPosition();
         updateStats(pos);
         
-        // 处理兜底定位逻辑
+        // 处理兜底定位逻辑 - 确保所有算法都能使用备用定位
         if (fallbackConfig.enabled) {
             handleFallbackLocation();
         }
         
-        last_update_time = currentTime;
+        last_stats_update = currentTime;
     }
     
     // 定期打印调试信息
@@ -418,12 +420,36 @@ void FusionLocationManager::setUpdateInterval(unsigned long interval_ms) {
     debugPrint("更新间隔设置为: " + String(interval_ms) + "ms");
 }
 
+void FusionLocationManager::resetOrigin() {
+    if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        simpleFusion->resetOrigin();
+        debugPrint("起始点已重置为当前位置");
+    } else if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->resetOrigin();
+        debugPrint("EKF起始点已重置为当前位置");
+    }
+}
+
+void FusionLocationManager::setOrigin(double lat, double lng) {
+    if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
+        simpleFusion->setOrigin(lat, lng);
+        debugPrint("起始点已设置为: " + String(lat, 6) + ", " + String(lng, 6));
+    } else if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->setOrigin(lat, lng);
+        debugPrint("EKF起始点已设置为: " + String(lat, 6) + ", " + String(lng, 6));
+    }
+}
+
 void FusionLocationManager::setDebug(bool enable) {
     debug_enabled = enable;
     
     if (imuProvider) imuProvider->setDebug(enable);
     if (gpsProvider) gpsProvider->setDebug(enable);
     if (magProvider) magProvider->setDebug(enable);
+    
+    // 设置融合算法的调试
+    if (simpleFusion) simpleFusion->setDebug(enable);
+    if (ekfTracker) ekfTracker->setDebug(enable);
     
     Serial.printf("[%s] 调试模式: %s\n", TAG, enable ? "开启" : "关闭");
 }
@@ -530,7 +556,16 @@ String FusionLocationManager::getPositionJSON() {
     json += "\"location_type\":\"FUSION_LOCATION\",";
     json += "\"satellites\":" + String(status.gps_available ? air780eg.getGNSS().gnss_data.satellites : 0) + ",";
     json += "\"is_fixed\":" + String(status.gps_available ? "true" : "false") + ",";
-    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false");
+    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false") + ",";
+    
+    // 添加相对位移信息
+    json += "\"displacement\":{";
+    json += "\"x\":" + String(pos.displacement.x, 2) + ",";
+    json += "\"y\":" + String(pos.displacement.y, 2) + ",";
+    json += "\"distance\":" + String(pos.displacement.distance, 2) + ",";
+    json += "\"bearing\":" + String(pos.displacement.bearing, 1);
+    json += "}";
+    
     json += "}";
     return json;
 }
@@ -592,39 +627,27 @@ void FusionLocationManager::handleFallbackLocation() {
     
     // 检查GNSS信号是否丢失
     if (isGNSSSignalLost()) {
-        // debugPrint("GNSS信号丢失，启动兜底定位策略");
-        
         // 根据配置决定使用WiFi还是LBS
         if (fallbackConfig.prefer_wifi_over_lbs) {
             // 优先尝试WiFi定位
             if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
-                if (tryWiFiLocation()) {
-                    fallbackConfig.last_wifi_time = currentTime;
-                    return; // WiFi定位成功，不再尝试LBS
-                }
-            }
-            
-            // WiFi定位失败或未到间隔时间，尝试LBS
-            if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
-                if (tryLBSLocation()) {
-                    fallbackConfig.last_lbs_time = currentTime;
-                }
+                tryWiFiLocation();
+                fallbackConfig.last_wifi_time = currentTime;
+                return; // WiFi定位成功，不再尝试LBS
+                // WiFi失败，立即尝试LBS作为备用
+                tryLBSLocation();
+                fallbackConfig.last_lbs_time = currentTime;
             }
         } else {
             // 优先尝试LBS定位
             if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
-                if (tryLBSLocation()) {
-                    fallbackConfig.last_lbs_time = currentTime;
-                    return; // LBS定位成功，不再尝试WiFi
-                }
-            }
-            
-            // LBS定位失败或未到间隔时间，尝试WiFi
-            if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
-                if (tryWiFiLocation()) {
-                    fallbackConfig.last_wifi_time = currentTime;
-                }
-            }
+                tryLBSLocation();
+                fallbackConfig.last_lbs_time = currentTime;
+                return; // LBS定位成功，不再尝试WiFi
+                // LBS失败，立即尝试WiFi作为备用
+                tryWiFiLocation();
+                fallbackConfig.last_wifi_time = currentTime;
+            } 
         }
     }
 }

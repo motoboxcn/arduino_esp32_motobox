@@ -1,4 +1,5 @@
 #include "PWMLED.h"
+#include "LEDDebug.h"  // 新增：LED调试支持
 
 #ifdef PWM_LED_PIN
 PWMLED pwmLed(PWM_LED_PIN);
@@ -37,11 +38,21 @@ PWMLED::PWMLED(uint8_t pin) :
 }
 
 void PWMLED::begin() {
+    LED_DEBUG_ENTER("PWMLED::begin");
+    LED_DEBUG_PRINTF("初始化PWM LED，引脚: %d\n", _pin);
+    
     FastLED.addLeds<WS2812B, PWM_LED_PIN, GRB>(_leds, NUM_LEDS);
+    
+    LED_DEBUG_PRINTF("PWM LED 初始化完成，引脚: %d\n", _pin);
     Serial.printf("[PWMLED] 初始化完成，引脚: %d\n", _pin);
+    
+    LED_DEBUG_EXIT("PWMLED::begin");
 }
 
 void PWMLED::deinit() {
+    LED_DEBUG_ENTER("PWMLED::deinit");
+    LED_DEBUG_PRINTF("反初始化PWM LED，引脚: %d\n", _pin);
+    
     // 关闭所有LED
     setBrightness(0);
     _mode = LED_OFF;
@@ -50,7 +61,10 @@ void PWMLED::deinit() {
     FastLED.clear();
     FastLED.show();
     
+    LED_DEBUG_PRINTF("PWM LED 反初始化完成，引脚: %d\n", _pin);
     Serial.printf("[PWMLED] 反初始化完成，引脚: %d\n", _pin);
+    
+    LED_DEBUG_EXIT("PWMLED::deinit");
 }
 
 void PWMLED::initRainbow() {
@@ -97,6 +111,8 @@ void PWMLED::loop() {
 
 void PWMLED::setMode(LEDMode mode) {
     if (_mode != mode) {
+        LED_DEBUG_STATE_CHANGE(ledModeToString(_mode), ledModeToString(mode), "PWM LED模式");
+        
         _mode = mode;
         _lastUpdate = 0;
         _blinkState = false;
@@ -105,12 +121,15 @@ void PWMLED::setMode(LEDMode mode) {
         if (mode == LED_BREATH) {
             _breathValue = _brightness / 4; // 从25%亮度开始
             _breathIncreasing = true;
+            LED_DEBUG_PRINTF("设置呼吸模式，初始亮度: %d, 目标亮度: %d\n", _breathValue, _brightness);
             Serial.printf("[PWMLED] 设置呼吸模式，初始亮度: %d, 目标亮度: %d\n", _breathValue, _brightness);
         } else {
             _breathValue = 0;
             _breathIncreasing = true;
         }
         
+        LED_DEBUG_PRINTF("PWM LED模式变更完成: %s, 颜色: %s, 亮度: %d\n", 
+                        ledModeToString(mode), ledColorToString(_currentColor), _brightness);
         Serial.printf("[PWMLED] 模式变更: %d, 颜色: %d, 亮度: %d\n", mode, _currentColor, _brightness);
         updateColor();
     }
@@ -118,52 +137,48 @@ void PWMLED::setMode(LEDMode mode) {
 
 void PWMLED::setColor(LEDColor color) {
     if (_currentColor != color) {
+        LED_DEBUG_STATE_CHANGE(ledColorToString(_currentColor), ledColorToString(color), "PWM LED颜色");
         _currentColor = color;
         updateColor();
     }
 }
 
 void PWMLED::setBrightness(uint8_t brightness) {
-    _brightness = min(brightness, MAX_BRIGHTNESS);
-    updateColor();
+    uint8_t newBrightness = min(brightness, TOP_LEVEL);
+    if (_brightness != newBrightness) {
+        LED_DEBUG_PRINTF("PWM LED亮度变化: %d -> %d\n", _brightness, newBrightness);
+        _brightness = newBrightness;
+        updateColor();
+    }
 }
 
 void PWMLED::updateBreathEffect() {
-    static unsigned long lastDebugTime = 0;
-    bool debugOutput = (millis() - lastDebugTime > 2000); // 每2秒输出一次调试信息
-    
     if (_breathIncreasing) {
         _breathValue += BREATH_STEP;
         if (_breathValue >= _brightness) {
             _breathValue = _brightness;
             _breathIncreasing = false;
-            if (debugOutput) {
-                Serial.printf("[PWMLED] 呼吸效果到达最大值: %d\n", _breathValue);
-            }
+            LED_DEBUG_PRINTF("呼吸效果到达最大值: %d\n", _breathValue);
         }
     } else {
         if (_breathValue <= BREATH_STEP) {
             _breathValue = 0;
             _breathIncreasing = true;
-            if (debugOutput) {
-                Serial.printf("[PWMLED] 呼吸效果到达最小值: %d\n", _breathValue);
-            }
+            LED_DEBUG_PRINTF("呼吸效果到达最小值: %d\n", _breathValue);
         } else {
             _breathValue -= BREATH_STEP;
         }
     }
     
-    if (debugOutput) {
-        Serial.printf("[PWMLED] 呼吸效果更新: 当前值=%d, 目标=%d, 递增=%s\n", 
-                     _breathValue, _brightness, _breathIncreasing ? "是" : "否");
-        lastDebugTime = millis();
-    }
+    LED_DEBUG_THROTTLED(3000, "呼吸效果更新: 当前值=%d, 目标=%d, 递增=%s\n", 
+                       _breathValue, _brightness, _breathIncreasing ? "是" : "否");
     
     showLED();
 }
 
 void PWMLED::updateBlinkEffect() {
     _blinkState = !_blinkState;
+    LED_DEBUG_PRINTF("闪烁效果更新: 状态=%s\n", _blinkState ? "亮" : "灭");
     showLED();
 }
 
@@ -196,6 +211,10 @@ void PWMLED::showLED() {
             // 使用设置的亮度
             break;
     }
+    
+    LED_DEBUG_THROTTLED(5000, "显示LED: 模式=%s, 颜色=%s, 设定亮度=%d, 实际亮度=%d, RGB=(%d,%d,%d)\n",
+                       ledModeToString(_mode), ledColorToString(_currentColor), 
+                       _brightness, actualBrightness, rgb.r, rgb.g, rgb.b);
     
     // 应用亮度缩放
     _leds[0].nscale8(actualBrightness);

@@ -328,8 +328,12 @@ void setup()
   //================ 融合定位初始化开始 ================
 #ifdef ENABLE_FUSION_LOCATION
   Serial.println("[融合定位] 初始化融合定位系统...");
-  // 使用EKF车辆模型算法，适合摩托车应用
+  // 使用EKF车辆模型算法，适合摩托车应用 FUSION_EKF_VEHICLE FUSION_SIMPLE_KALMAN
+  #if FUSION_EKF_VEHICLE_ENABLED == true
   if (fusionLocationManager.begin(FUSION_EKF_VEHICLE, FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG))
+  #else
+  if (fusionLocationManager.begin(FUSION_SIMPLE_KALMAN, FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG))
+  #endif
   {
     Serial.println("[融合定位] ✅ EKF融合定位系统初始化成功");
     fusionLocationManager.setDebug(FUSION_LOCATION_DEBUG_ENABLED);

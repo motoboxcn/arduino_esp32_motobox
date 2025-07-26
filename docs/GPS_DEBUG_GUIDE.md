@@ -10,8 +10,8 @@
 
 ```cpp
 // GPS全链路调试输出控制
-#ifndef GPS_DEBUG_ENABLED
-#define GPS_DEBUG_ENABLED             false
+#ifndef ENABLE_GPS_LOGGER
+#define ENABLE_GPS_LOGGER             false
 #endif
 
 // GNSS调试输出控制（Air780EG GNSS功能）
@@ -30,7 +30,7 @@
 ```ini
 [env:your_environment]
 build_flags = 
-    -DGPS_DEBUG_ENABLED=true
+    -DENABLE_GPS_LOGGER=true
     -DGNSS_DEBUG_ENABLED=true
     -DLBS_DEBUG_ENABLED=true
 ```
@@ -105,7 +105,7 @@ LBS_DEBUG_PRINTF(fmt, ...)    // 格式化打印
 ```ini
 # 启用GPS相关调试
 build_flags = 
-    -DGPS_DEBUG_ENABLED=true
+    -DENABLE_GPS_LOGGER=true
     -DGNSS_DEBUG_ENABLED=true
 ```
 
@@ -121,7 +121,7 @@ build_flags =
 ```ini
 # 启用所有GPS相关调试
 build_flags = 
-    -DGPS_DEBUG_ENABLED=true
+    -DENABLE_GPS_LOGGER=true
     -DGNSS_DEBUG_ENABLED=true
     -DLBS_DEBUG_ENABLED=true
     -DSYSTEM_DEBUG_ENABLED=true
@@ -160,7 +160,7 @@ python3 scripts/test_gps_debug.py --port /dev/ttyUSB0 --baudrate 115200
 **解决方案：**
 ```cpp
 // 检查config.h中的调试开关
-#define GPS_DEBUG_ENABLED true
+#define ENABLE_GPS_LOGGER true
 
 // 检查GPSManager初始化
 gpsManager.init();
@@ -212,7 +212,7 @@ if (air780eg_modem.isNetworkReady()) {
 ```ini
 # 生产环境关闭所有调试
 build_flags = 
-    -DGPS_DEBUG_ENABLED=false
+    -DENABLE_GPS_LOGGER=false
     -DGNSS_DEBUG_ENABLED=false
     -DLBS_DEBUG_ENABLED=false
 ```

@@ -91,8 +91,8 @@ void PowerManager::loop()
     static unsigned long lastCheck = 0;
     unsigned long now = millis();
     
-    // 每200ms检查一次
-    if (now - lastCheck < 200) {
+    // 每1s检查一次
+    if (now - lastCheck < 1000) {
         return;
     }
     lastCheck = now;
@@ -352,6 +352,7 @@ void PowerManager::disablePeripherals()
     // 关闭音频放大器和相关电路
     // 需要在 AudioManager 中实现 powerOff() 方法
     Serial.println("[电源管理] ⚠️  音频模块关闭代码需要实现");
+    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
     #endif
     
     // 7. 关闭串口（除了调试串口）

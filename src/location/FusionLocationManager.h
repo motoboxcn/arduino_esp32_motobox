@@ -224,6 +224,18 @@ public:
     void setInitialPosition(double lat, double lng);
     
     /**
+     * @brief 重置起始点为当前位置（用于相对位移计算）
+     */
+    void resetOrigin();
+    
+    /**
+     * @brief 设置指定位置为起始点
+     * @param lat 纬度
+     * @param lng 经度
+     */
+    void setOrigin(double lat, double lng);
+    
+    /**
      * @brief 设置更新间隔
      * @param interval_ms 更新间隔（毫秒）
      */

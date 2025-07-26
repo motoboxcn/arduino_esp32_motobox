@@ -2,6 +2,11 @@
 #define LED_TYPES_H
 
 /**
+ * @brief LED亮度常量定义
+ */
+static const uint8_t TOP_LEVEL = 255 * 0.5; // LED最大亮度
+
+/**
  * @brief 统一的LED显示模式
  * 
  */

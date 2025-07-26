@@ -10,7 +10,7 @@ GPSLogger::GPSLogger(SDManager* manager) :
     isFirstRecord(true), 
     sessionStartTime(0),
     recordCount(0),
-    debugMode(GPS_DEBUG_ENABLED) {
+    debugMode(GPS_LOGGER_DEBUG_ENABLED) {
 }
 
 bool GPSLogger::begin() {
