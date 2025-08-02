@@ -538,7 +538,7 @@ void Device::initializeGSM()
     Serial.println("[GSM] 初始化Air780EG模块...");
     Serial.printf("[GSM] 引脚配置 - RX:%d, TX:%d, EN:%d\n", GSM_RX_PIN, GSM_TX_PIN, GSM_EN);
     // 设置日志级别 (可选)
-#ifdef AIR780EG_LOG_VERBOSE_ENABLED
+#if AIR780EG_LOG_VERBOSE_ENABLED == true
     Air780EG::setLogLevel(AIR780EG_LOG_VERBOSE);
 #else
     Air780EG::setLogLevel(AIR780EG_LOG_INFO);

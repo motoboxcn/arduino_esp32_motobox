@@ -44,7 +44,8 @@ void PowerManager::begin()
     // 从存储读取休眠时间
     sleepTimeSec = PreferencesUtils::loadSleepTime();
     if (sleepTimeSec == 0) {
-        sleepTimeSec = get_device_state()->sleep_time;
+        // 默认至少为 60 秒
+        sleepTimeSec = 60;
     }
     
     // 处理唤醒事件
@@ -98,12 +99,12 @@ void PowerManager::loop()
     lastCheck = now;
     
     // 检查车辆状态（如果启用）
-    handleVehicleStateChange();
-    if (isVehicleStarted()) {
-        lastMotionTime = now; // 车辆启动时保持活跃
-        Serial.println("[电源管理] 车辆启动中，不进入睡眠！");
-        return;
-    }
+    // handleVehicleStateChange();
+    // if (isVehicleStarted()) {
+    //     lastMotionTime = now; // 车辆启动时保持活跃
+    //     Serial.println("[电源管理] 车辆启动中，不进入睡眠！");
+    //     return;
+    // }
     
     // 检查IMU运动
     #ifdef ENABLE_IMU

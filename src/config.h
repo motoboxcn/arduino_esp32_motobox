@@ -24,6 +24,8 @@
 #endif
 
 #define ENABLE_LED
+#define LED_DEBUG_ENABLED true // LED调试已启用
+
 // #define ENABLE_TFT  // 暂时禁用TFT
 #define ENABLE_BLE
 
@@ -54,7 +56,7 @@
 #define AIR780EG_TIMEOUT             5000
 #define AIR780EG_GNSS_UPDATE_RATE    1000  // 1Hz
 #define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
-#define AIR780EG_LOG_VERBOSE_ENABLED
+#define AIR780EG_LOG_VERBOSE_ENABLED false
 
 // MQTT配置
 #define MQTT_BROKER                  "222.186.32.152"

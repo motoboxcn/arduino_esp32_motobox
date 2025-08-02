@@ -8,3 +8,7 @@ lib/Air780EG/
 releases/
 .cliExtra/
 lib/FusionLocation
+.amazonq/*
+tests/*
+test/*
+scripts/*

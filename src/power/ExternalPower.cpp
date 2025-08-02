@@ -75,17 +75,10 @@ void ExternalPower::updateState()
             // 更新设备状态
             device_state.external_power = _is_connected;
             
-            debugPrint(String("外部电源状态确认变化: ") + (_is_connected ? "已连接" : "未连接"));
-            
-            // 可以在这里添加状态变化的回调处理
-            if (_is_connected)
-            {
-                Serial.println("[外部电源] 车辆电门接入");
-            }
-            else
-            {
-                Serial.println("[外部电源] 车辆电门断开");
-            }
+            // 统一的状态变化输出
+            String status_text = _is_connected ? "车辆电门接入" : "车辆电门断开";
+            debugPrint(String("外部电源状态确认变化: ") + status_text);
+            Serial.println("[外部电源] " + status_text);
         }
     }
 }
