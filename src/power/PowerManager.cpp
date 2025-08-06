@@ -70,6 +70,15 @@ void PowerManager::handleWakeup()
                     Serial.println("[电源管理] ✅ 确认运动唤醒事件");
                 }
                 #endif
+                
+                // 恢复其他传感器
+                #ifdef ENABLE_COMPASS
+                extern Compass compass;
+                if (compass.isInitialized()) {
+                    compass.exitLowPowerMode();
+                    Serial.println("[电源管理] ✅ 罗盘传感器已恢复");
+                }
+                #endif
                 break;
             }
         case ESP_SLEEP_WAKEUP_TIMER:
@@ -361,7 +370,26 @@ void PowerManager::disablePeripherals()
     Serial2.end();
     #endif
     
-    // 7. 安全关闭 ADC
+    // 8. 配置传感器低功耗模式
+    Serial.println("[电源管理] 配置传感器低功耗模式...");
+    
+    // IMU传感器深度睡眠配置（已在configureWakeupSources中处理）
+    #ifdef ENABLE_IMU
+    Serial.println("[电源管理] IMU已配置WakeOnMotion模式");
+    #endif
+    
+    // 罗盘传感器低功耗配置
+    #ifdef ENABLE_COMPASS
+    extern Compass compass;
+    if (compass.isInitialized()) {
+        compass.configureForDeepSleep();
+        Serial.println("[电源管理] ✅ 罗盘传感器已配置低功耗模式");
+    } else {
+        Serial.println("[电源管理] 罗盘传感器未初始化，跳过低功耗配置");
+    }
+    #endif
+    
+    // 8. 安全关闭 ADC
     Serial.println("[电源管理] 安全关闭 ADC...");
     #ifdef BAT_PIN
     // 只有在使用 ADC 的情况下才尝试关闭

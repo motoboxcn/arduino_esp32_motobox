@@ -240,4 +240,41 @@ void Compass::updateCompassData(int16_t x, int16_t y, int16_t z, float heading) 
     compass_data.timestamp = millis();
 }
 
+void Compass::enterLowPowerMode()
+{
+    if (!_initialized) return;
+    
+    // QMC5883L进入待机模式
+    // 通过设置控制寄存器进入低功耗模式
+    TwoWire& wire = getSharedWire();
+    wire.beginTransmission(0x0D); // QMC5883L地址
+    wire.write(0x09); // 控制寄存器1
+    wire.write(0x00); // 待机模式
+    wire.endTransmission();
+    
+    Serial.printf("[%s] 进入低功耗模式\n", TAG);
+}
+
+void Compass::exitLowPowerMode()
+{
+    if (!_initialized) return;
+    
+    // 重新初始化QMC5883L
+    qmc.init();
+    delay(50); // 等待传感器稳定
+    
+    Serial.printf("[%s] 退出低功耗模式\n", TAG);
+}
+
+bool Compass::configureForDeepSleep()
+{
+    if (!_initialized) return false;
+    
+    // QMC5883L进入最低功耗模式
+    enterLowPowerMode();
+    
+    Serial.printf("[%s] 已配置深度睡眠模式\n", TAG);
+    return true;
+}
+
 #endif

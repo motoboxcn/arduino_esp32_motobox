@@ -155,6 +155,21 @@ public:
      */
     void reset();
 
+    /**
+     * @brief 进入低功耗模式
+     */
+    void enterLowPowerMode();
+
+    /**
+     * @brief 退出低功耗模式
+     */
+    void exitLowPowerMode();
+
+    /**
+     * @brief 配置深度睡眠模式
+     */
+    bool configureForDeepSleep();
+
 private:
     bool _initialized;
     float _declination;          // 磁偏角校正值
