@@ -18,6 +18,7 @@
 #include "device.h"
 #include "Air780EG.h"
 #include "utils/serialCommand.h"
+#include "utils/DataCollector.h"
 #include "ota/SDCardOTA.h"
 #include "SD/SDManager.h"
 #include "SD/GPSLogger.h"
@@ -385,6 +386,12 @@ void setup()
 #else
   Serial.println("音频功能: ❌ 编译时未启用");
 #endif
+  
+  // 初始化数据采集器
+  Serial.println("=== 数据采集器初始化 ===");
+  dataCollector.setDebug(true);
+  dataCollector.begin();
+  
   Serial.println("=== 系统初始化完成 ===");
 }
 
@@ -429,6 +436,9 @@ void loop()
     }
 #endif
   }
+
+  // 数据采集器处理
+  dataCollector.loop();
 
   // 最小延迟，实现高频更新（约1000Hz）
   delay(1);

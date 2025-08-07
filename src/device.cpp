@@ -1,5 +1,6 @@
 #include "device.h"
 #include "utils/DebugUtils.h"
+#include "utils/DataCollector.h"
 #include "config.h"
 #include "tft/TFT.h"
 #include "imu/qmi8658.h"
@@ -168,6 +169,64 @@ void mqttMessageCallback(const String &topic, const String &payload)
             else
             {
                 Serial.println("休眠时间不能小于0");
+            }
+        }
+        // 设置数据采集模式
+        else if (strcmp(cmd, "set_data_mode") == 0)
+        {
+            // {"cmd": "set_data_mode", "mode": "normal"} 或 {"mode": "sport"}
+            const char* mode = doc["mode"];
+            if (mode != nullptr)
+            {
+                if (strcmp(mode, "normal") == 0)
+                {
+                    dataCollector.setMode(MODE_NORMAL);
+                    Serial.println("数据采集模式已设置为: 正常模式(5秒)");
+                }
+                else if (strcmp(mode, "sport") == 0)
+                {
+                    dataCollector.setMode(MODE_SPORT);
+                    Serial.println("数据采集模式已设置为: 运动模式(1秒)");
+                }
+                else
+                {
+                    Serial.println("❌ 无效的数据采集模式: " + String(mode));
+                }
+            }
+            else
+            {
+                Serial.println("❌ 缺少mode参数");
+            }
+        }
+        // 控制数据采集
+        else if (strcmp(cmd, "data_collection") == 0)
+        {
+            // {"cmd": "data_collection", "action": "start"} 或 {"action": "stop"}
+            const char* action = doc["action"];
+            if (action != nullptr)
+            {
+                if (strcmp(action, "start") == 0)
+                {
+                    dataCollector.startCollection();
+                    Serial.println("数据采集已启动");
+                }
+                else if (strcmp(action, "stop") == 0)
+                {
+                    dataCollector.stopCollection();
+                    Serial.println("数据采集已停止");
+                }
+                else if (strcmp(action, "stats") == 0)
+                {
+                    dataCollector.printStats();
+                }
+                else
+                {
+                    Serial.println("❌ 无效的操作: " + String(action));
+                }
+            }
+            else
+            {
+                Serial.println("❌ 缺少action参数");
             }
         }
         // reboot
