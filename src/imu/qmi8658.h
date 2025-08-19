@@ -101,6 +101,22 @@ public:
      * @brief 获取温度
      */
     float getTemperature() const { return imu_data.temperature; }
+    
+    /**
+     * @brief 获取加速度矢量大小
+     */
+    float getAccelMagnitude() const;
+    
+    /**
+     * @brief 设置高精度模式
+     * @param enabled true: 启用高精度模式, false: 标准模式
+     */
+    void setHighPrecisionMode(bool enabled);
+    
+    /**
+     * @brief 获取当前是否为高精度模式
+     */
+    bool isHighPrecisionMode() const { return _highPrecisionMode; }
 
     void setDebug(bool debug) { _debug = debug; }
 
@@ -109,6 +125,7 @@ private:
     int motionIntPin;           // 运动检测中断引脚
     float motionThreshold;      // 运动检测阈值
     bool motionDetectionEnabled;// 运动检测是否启用
+    bool _highPrecisionMode;    // 高精度模式标志
     SensorQMI8658 qmi;
     
     // 配置运动检测参数

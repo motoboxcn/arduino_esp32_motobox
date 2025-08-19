@@ -62,7 +62,8 @@ void ExternalPower::updateState()
     {
         _raw_state = current_raw_state;
         _last_change_time = current_time;
-        debugPrint(String("外部电源原始状态变化: ") + (current_raw_state ? "已连接" : "未连接"));
+        // debugPrint(String("外部电源原始状态变化: ") + (current_raw_state ? "已连接" : "未连接"));
+        Serial.printf("[外部电源] 原始状态变化: %s\n", current_raw_state ? "已连接" : "未连接");
     }
     
     // 防抖处理：状态稳定一段时间后才更新

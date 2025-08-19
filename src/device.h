@@ -65,6 +65,7 @@ typedef struct
     uint64_t sdCardSizeMB; // SD卡大小(MB)
     uint64_t sdCardFreeMB; // SD卡剩余空间(MB)
     bool audioReady; // 音频系统准备状态
+    int power_mode; // 功耗模式 0:休眠 1:基本 2:正常 3:运动
 } device_state_t;
 
 // 添加状态变化跟踪

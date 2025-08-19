@@ -15,7 +15,8 @@ void IRAM_ATTR IMU::motionISR()
 IMU::IMU(int motionIntPin)
     : motionIntPin(motionIntPin),
     _debug(false),
-    _lastDebugPrintTime(0)
+    _lastDebugPrintTime(0),
+    _highPrecisionMode(false)
 {
     this->motionIntPin = motionIntPin;
     motionThreshold = MOTION_DETECTION_THRESHOLD_DEFAULT;
@@ -438,4 +439,57 @@ String imu_data_to_json(imu_data_t &imu_data)
     doc["yaw"] = imu_data.yaw;          // 航向角
     doc["temp"] = imu_data.temperature; // 温度
     return doc.as<String>();
+}
+
+float IMU::getAccelMagnitude() const {
+    return sqrt(imu_data.accel_x * imu_data.accel_x + 
+                imu_data.accel_y * imu_data.accel_y + 
+                imu_data.accel_z * imu_data.accel_z);
+}
+
+void IMU::setHighPrecisionMode(bool enabled) {
+    if (_highPrecisionMode == enabled) {
+        return; // 已经是目标模式，无需改变
+    }
+    
+    _highPrecisionMode = enabled;
+    
+    if (enabled) {
+        Serial.println("[IMU] 切换到高精度模式");
+        
+        // 高精度模式：使用现有的最高采样率和更低的滤波
+        qmi.configGyroscope(
+            SensorQMI8658::GYR_RANGE_512DPS,   // 降低量程提高精度
+            SensorQMI8658::GYR_ODR_896_8Hz,    // 使用现有最高采样率
+            SensorQMI8658::LPF_MODE_0          // 最小滤波
+        );
+        
+        qmi.configAccelerometer(
+            SensorQMI8658::ACC_RANGE_2G,       // 降低量程提高精度
+            SensorQMI8658::ACC_ODR_1000Hz      // 使用现有最高采样率
+        );
+        
+        // 更敏感的运动检测
+        configureMotionDetection(0.02f); // 降低阈值到0.02g
+        
+    } else {
+        Serial.println("[IMU] 切换到标准精度模式");
+        
+        // 标准模式：平衡精度和功耗
+        qmi.configGyroscope(
+            SensorQMI8658::GYR_RANGE_1024DPS,  // 标准量程
+            SensorQMI8658::GYR_ODR_896_8Hz,    // 标准采样率
+            SensorQMI8658::LPF_MODE_3          // 标准滤波
+        );
+        
+        qmi.configAccelerometer(
+            SensorQMI8658::ACC_RANGE_4G,       // 标准量程
+            SensorQMI8658::ACC_ODR_1000Hz      // 标准采样率
+        );
+        
+        // 标准运动检测
+        configureMotionDetection(motionThreshold); // 使用默认阈值
+    }
+    
+    Serial.printf("[IMU] 高精度模式: %s\n", enabled ? "启用" : "禁用");
 }

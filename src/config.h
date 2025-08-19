@@ -66,8 +66,14 @@
 #define MQTT_PASSWORD                "box"
 #define MQTT_KEEPALIVE               60
 #define MQTT_RECONNECT_INTERVAL      30000
-#define MQTT_GPS_PUBLISH_INTERVAL     5000 // 5秒上报一次
-#define MQTT_DEVICE_STATUS_PUBLISH_INTERVAL 30000 // 30秒上报一次
+#define MQTT_GPS_PUBLISH_INTERVAL     5000 // 5秒上报一次（正常模式默认值）
+#define MQTT_DEVICE_STATUS_PUBLISH_INTERVAL 30000 // 30秒上报一次（正常模式默认值）
+
+// 功耗模式管理
+#define ENABLE_POWER_MODE_MANAGEMENT
+#define POWER_MODE_AUTO_SWITCH_ENABLED    true    // 默认启用自动模式切换
+#define POWER_MODE_EVALUATION_INTERVAL    5000    // 模式评估间隔（毫秒）
+#define POWER_MODE_MIN_SWITCH_INTERVAL    30000   // 最小模式切换间隔（毫秒）
 
 // GPS配置
 #define GPS_UPDATE_INTERVAL          1000

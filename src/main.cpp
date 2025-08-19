@@ -14,6 +14,7 @@
 #include "Arduino.h"
 #include "config.h"
 #include "power/PowerManager.h"
+#include "power/PowerModeManager.h"
 #include "led/LEDManager.h"
 #include "device.h"
 #include "Air780EG.h"
@@ -130,6 +131,11 @@ void taskSystem(void *parameter)
 
     // 电源管理
     powerManager.loop();
+    
+    // 功耗模式管理
+    #ifdef ENABLE_POWER_MODE_MANAGEMENT
+    powerModeManager.loop();
+    #endif
 
     // LED状态更新
     ledManager.loop();
@@ -263,6 +269,11 @@ void setup()
   powerManager.begin();
 
   powerManager.printWakeupReason();
+  
+  // 初始化功耗模式管理器
+  #ifdef ENABLE_POWER_MODE_MANAGEMENT
+  powerModeManager.begin();
+  #endif
 
   //================ SD卡初始化开始 ================
 #ifdef ENABLE_SDCARD

@@ -1,5 +1,9 @@
 #include "utils/serialCommand.h"
 
+#ifdef ENABLE_POWER_MODE_MANAGEMENT
+#include "power/PowerModeManager.h"
+#endif
+
 #ifdef ENABLE_GPS_LOGGER
 #include "SD/GPSLogger.h"
 extern GPSLogger gpsLogger;
@@ -286,6 +290,87 @@ void handleSerialCommand()
             delay(1000);
             ESP.restart();
         }
+        else if (command.startsWith("power."))
+        {
+            #ifdef ENABLE_POWER_MODE_MANAGEMENT
+            extern PowerModeManager powerModeManager;
+            
+            if (command == "power.status")
+            {
+                powerModeManager.printCurrentStatus();
+            }
+            else if (command == "power.sleep")
+            {
+                Serial.println("切换到休眠模式...");
+                powerModeManager.setMode(POWER_MODE_SLEEP);
+            }
+            else if (command == "power.basic")
+            {
+                Serial.println("切换到基本模式...");
+                powerModeManager.setMode(POWER_MODE_BASIC);
+            }
+            else if (command == "power.normal")
+            {
+                Serial.println("切换到正常模式...");
+                powerModeManager.setMode(POWER_MODE_NORMAL);
+            }
+            else if (command == "power.sport")
+            {
+                Serial.println("切换到运动模式...");
+                powerModeManager.setMode(POWER_MODE_SPORT);
+            }
+            else if (command == "power.auto.on")
+            {
+                Serial.println("启用自动模式切换...");
+                powerModeManager.enableAutoModeSwitch(true);
+            }
+            else if (command == "power.auto.off")
+            {
+                Serial.println("禁用自动模式切换...");
+                powerModeManager.enableAutoModeSwitch(false);
+            }
+            else if (command == "power.eval")
+            {
+                Serial.println("手动触发模式评估...");
+                powerModeManager.evaluateAndSwitchMode();
+            }
+            else if (command == "power.config")
+            {
+                powerModeManager.printModeConfigs();
+            }
+            else if (command == "power.help")
+            {
+                Serial.println("=== 功耗模式命令帮助 ===");
+                Serial.println("状态查询:");
+                Serial.println("  power.status  - 显示当前功耗模式状态");
+                Serial.println("  power.config  - 显示所有模式配置");
+                Serial.println("");
+                Serial.println("模式切换:");
+                Serial.println("  power.sleep   - 切换到休眠模式");
+                Serial.println("  power.basic   - 切换到基本模式");
+                Serial.println("  power.normal  - 切换到正常模式");
+                Serial.println("  power.sport   - 切换到运动模式");
+                Serial.println("");
+                Serial.println("自动模式:");
+                Serial.println("  power.auto.on  - 启用自动模式切换");
+                Serial.println("  power.auto.off - 禁用自动模式切换");
+                Serial.println("  power.eval     - 手动触发模式评估");
+                Serial.println("");
+                Serial.println("模式说明:");
+                Serial.println("  休眠模式: 深度睡眠，最低功耗");
+                Serial.println("  基本模式: 5s GPS，低频IMU，省电运行");
+                Serial.println("  正常模式: 1s GPS，标准IMU，平衡性能");
+                Serial.println("  运动模式: 1s GPS，高精度IMU，最高性能");
+            }
+            else
+            {
+                Serial.println("❌ 未知功耗命令: " + command);
+                Serial.println("输入 'power.help' 查看功耗命令帮助");
+            }
+            #else
+            Serial.println("❌ 功耗模式管理未启用");
+            #endif
+        }
         else if (command == "help")
         {
             Serial.println("=== 可用命令 ===");
@@ -315,6 +400,15 @@ void handleSerialCommand()
             Serial.println("  gl         - 列出GPS日志文件");
             Serial.println("  gi         - 显示GPS存储信息");
             Serial.println("  gh         - 显示GPS命令帮助");
+            Serial.println("");
+#endif
+#ifdef ENABLE_POWER_MODE_MANAGEMENT
+            Serial.println("功耗模式命令:");
+            Serial.println("  power.status - 显示功耗模式状态");
+            Serial.println("  power.basic  - 切换到基本模式");
+            Serial.println("  power.normal - 切换到正常模式");
+            Serial.println("  power.sport  - 切换到运动模式");
+            Serial.println("  power.help   - 显示功耗命令帮助");
             Serial.println("");
 #endif
             Serial.println("提示: 命令不区分大小写");
