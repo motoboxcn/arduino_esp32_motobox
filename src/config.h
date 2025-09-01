@@ -26,15 +26,9 @@
 #define ENABLE_LED
 #define LED_DEBUG_ENABLED true // LED调试已启用
 
-// #define ENABLE_TFT  // 暂时禁用TFT
-#define ENABLE_BLE
-
-// BLE配置
-#define BLE_NAME                      "ESP32-MotoBox"
-#define SERVICE_UUID        "4FAFC201-1FB5-459E-8FCC-C5C9C331914B"
-#define DEVICE_CHAR_UUID    "BEB5483A-36E1-4688-B7F5-EA07361B26A8"
-#define GPS_CHAR_UUID       "BEB5483E-36E1-4688-B7F5-EA07361B26A8"
-#define IMU_CHAR_UUID       "BEB5483F-36E1-4688-B7F5-EA07361B26A8"
+// 轻量化版本 - 移除TFT和BLE功能
+// #define ENABLE_TFT  // 轻量化版本不需要显示屏
+// #define ENABLE_BLE  // 轻量化版本不需要蓝牙
 
 
 

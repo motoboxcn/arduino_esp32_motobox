@@ -11,13 +11,7 @@
 #include "led/LED.h"
 #include "imu/qmi8658.h"
 #include "power/PowerManager.h"
-#include "ble/ble_client.h"
-#include "ble/ble_server.h"
 #include "bat/BAT.h"
-// MQTT管理器已完全禁用
-// #ifndef DISABLE_MQTT
-// #include "net/MqttManager.h"
-// #endif
 #ifdef RTC_INT_PIN
 #include "power/ExternalPower.h"
 #endif

@@ -2,7 +2,6 @@
 #include "utils/DebugUtils.h"
 #include "utils/DataCollector.h"
 #include "config.h"
-#include "tft/TFT.h"
 #include "imu/qmi8658.h"
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM

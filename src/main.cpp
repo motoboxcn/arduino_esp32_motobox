@@ -1,13 +1,15 @@
 /**
- * ESP32 MotoBox - 摩托车数据采集与显示系统
+ * ESP32 MotoBox - 摩托车数据采集与监控系统 (轻量化版本)
  *
  * 硬件：ESP32-S3
- * 版本：2.0.0
+ * 版本：Lite 1.0.0
  *
- * 模式：
- * - MODE_ALLINONE: 独立模式，所有功能集成在一个设备上
- * - MODE_SERVER: 服务器模式，采集数据并通过BLE发送给客户端，同时通过MQTT发送到服务器
- * - MODE_CLIENT: 客户端模式，通过BLE接收服务器数据并显示
+ * 核心功能：
+ * - 4G通信 (Air780EG)
+ * - GNSS定位 + IMU融合定位
+ * - 数据采集与SD卡存储
+ * - 低功耗管理
+ * - MQTT数据上报
  */
 
 #include "config.h"
@@ -30,10 +32,6 @@
 
 #ifdef RTC_INT_PIN
 #include "power/ExternalPower.h"
-#endif
-
-#ifdef BTN_PIN
-#include "btn/BTN.h"
 #endif
 
 #ifdef LED_PIN
@@ -76,17 +74,6 @@ extern GPSLogger gpsLogger;
 #endif
 
 #include "version.h"
-#ifdef BLE_CLIENT
-#include "ble/ble_client.h"
-#endif
-#ifdef BLE_SERVER
-#include "ble/ble_server.h"
-#endif
-
-// 仅在未定义DISABLE_TFT时包含TFT相关头文件
-#ifdef ENABLE_TFT
-#include "tft/TFT.h"
-#endif
 
 #include <SD.h> // SD卡库
 #include <FS.h>
@@ -98,7 +85,7 @@ RTC_DATA_ATTR int bootCount = 0;
 
 /**
  * 系统监控任务
- * 负责电源管理、LED状态、按钮处理
+ * 负责电源管理、LED状态等核心功能
  */
 void taskSystem(void *parameter)
 {
@@ -117,18 +104,6 @@ void taskSystem(void *parameter)
     fusionLocationManager.loop();
 #endif
 
-#ifdef BLE_SERVER
-    bs.loop();
-#endif
-
-#ifdef BLE_CLIENT
-    bc.loop();
-#endif
-
-#ifdef ENABLE_TFT
-    tft_loop();
-#endif
-
     // 电源管理
     powerManager.loop();
     
@@ -142,11 +117,6 @@ void taskSystem(void *parameter)
 
 #ifdef BAT_PIN
     bat.loop();
-#endif
-
-#ifdef BTN_PIN
-    button.loop();
-    BTN::handleButtonEvents();
 #endif
 
 #ifdef RTC_INT_PIN
@@ -183,8 +153,7 @@ void taskSystem(void *parameter)
 
 /**
  * 数据处理任务
- * 负责数据采集、发送和显示
- * 可以阻塞的任务，要和主任务区分分配的内核
+ * 负责数据采集、发送和存储
  */
 void taskDataProcessing(void *parameter)
 {
@@ -225,12 +194,6 @@ void taskDataProcessing(void *parameter)
     }
 #endif
 
-
-#ifdef ENABLE_TFT
-    // 显示屏更新
-    tft_loop();
-#endif
-
 #ifdef ENABLE_COMPASS
     // 罗盘数据处理
     compass.loop();
@@ -240,21 +203,7 @@ void taskDataProcessing(void *parameter)
   } // for循环结束
 }
 
-#ifdef ENABLE_WIFI
-// WiFi处理任务
-void taskWiFi(void *parameter)
-{
-  Serial.println("[系统] WiFi任务启动");
-  while (true)
-  {
-    if (wifiManager.getConfigMode())
-    {
-      wifiManager.loop();
-    }
-    delay(1); // 更短的延迟，提高响应性
-  }
-}
-#endif
+
 
 void setup()
 {
@@ -388,9 +337,6 @@ void setup()
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
   xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
-#ifdef ENABLE_WIFI
-  xTaskCreate(taskWiFi, "TaskWiFi", 1024 * 15, NULL, 3, NULL);
-#endif
 
 #ifdef ENABLE_AUDIO
   Serial.println("音频功能: ✅ 编译时已启用");
