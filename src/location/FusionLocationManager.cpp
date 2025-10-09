@@ -626,28 +626,41 @@ void FusionLocationManager::handleFallbackLocation() {
     unsigned long currentTime = millis();
     
     // 检查GNSS信号是否丢失
-    if (isGNSSSignalLost()) {
-        // 根据配置决定使用WiFi还是LBS
-        if (fallbackConfig.prefer_wifi_over_lbs) {
-            // 优先尝试WiFi定位
-            if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
-                tryWiFiLocation();
-                fallbackConfig.last_wifi_time = currentTime;
-                return; // WiFi定位成功，不再尝试LBS
-                // WiFi失败，立即尝试LBS作为备用
-                tryLBSLocation();
-                fallbackConfig.last_lbs_time = currentTime;
+    if (!isGNSSSignalLost()) {
+        // GNSS信号正常，不需要兜底
+        return;
+    }
+    
+    // 检查是否有阻塞命令正在执行
+    if (air780eg.getGNSS().isBlockingCommandActive()) {
+        debugPrint("有阻塞命令正在执行，跳过兜底定位");
+        return;
+    }
+    
+    // 根据配置决定使用WiFi还是LBS
+    if (fallbackConfig.prefer_wifi_over_lbs) {
+        // 检查是否达到WiFi定位间隔
+        if (currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
+            debugPrint("尝试WiFi定位...");
+            bool wifi_success = tryWiFiLocation();
+            
+            // 只有在WiFi定位失败且达到LBS间隔时才尝试LBS
+            if (!wifi_success && currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
+                debugPrint("WiFi定位失败，尝试LBS定位");
+                tryLBSLocation();  // 不需要检查返回值，因为这是最后的尝试
             }
-        } else {
-            // 优先尝试LBS定位
-            if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
-                tryLBSLocation();
-                fallbackConfig.last_lbs_time = currentTime;
-                return; // LBS定位成功，不再尝试WiFi
-                // LBS失败，立即尝试WiFi作为备用
-                tryWiFiLocation();
-                fallbackConfig.last_wifi_time = currentTime;
-            } 
+        }
+    } else {
+        // 检查是否达到LBS定位间隔
+        if (currentTime - fallbackConfig.last_lbs_time >= fallbackConfig.lbs_interval) {
+            debugPrint("尝试LBS定位...");
+            bool lbs_success = tryLBSLocation();
+            
+            // 只有在LBS定位失败且达到WiFi间隔时才尝试WiFi
+            if (!lbs_success && currentTime - fallbackConfig.last_wifi_time >= fallbackConfig.wifi_interval) {
+                debugPrint("LBS定位失败，尝试WiFi定位");
+                tryWiFiLocation();  // 不需要检查返回值，因为这是最后的尝试
+            }
         }
     }
 }
