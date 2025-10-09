@@ -3,70 +3,85 @@
 
 #include <Arduino.h>
 #include "device.h"
-#include "utils/PreferencesUtils.h"
 
-#define FILTER_WINDOW_SIZE 20 // 滤波窗口大小
-#define EMA_ALPHA 0.1f       // 指数平均滤波系数
-#define OUTPUT_DIVIDER 5     // 输出分频器
-#define MAX_VOLTAGE_JUMP 50  // 最大允许电压跳变值(mV)
-
-class BAT
-{
+// 电池管理类
+class BAT {
 public:
     BAT(int adc_pin, int charging_pin);
+    
     void begin();
     void loop();
     void print_voltage();
     
-    // 添加调试控制
+    // 获取电池信息
+    int getVoltage() const { return stable_voltage; }
+    int getPercentage() const;  // 外部实现
+    bool isCharging() const { return _is_charging; }
+    
+    // 调试控制
     void setDebug(bool debug) { _debug = debug; }
-
-    // 新增：获取充电状态
-    bool isCharging();
-
+    
 private:
-    // 改为普通的静态常量数组声明
+    // 引脚配置
+    int pin;                    // ADC引脚
+    int charging_pin;           // 充电状态检测引脚
+    
+    // 充电状态管理
+    bool _is_charging;          // 当前充电状态
+    bool _last_stable_charging; // 上一次稳定的充电状态
+    int _charging_state_count;  // 充电状态变化计数器
+    static const int CHARGING_DEBOUNCE_COUNT = 5; // 防抖计数阈值
+    
+    // 电压相关
+    int voltage;                // 当前电压 (mV)
+    int ema_voltage;            // EMA滤波后的电压
+    int stable_voltage;         // 稳定输出电压
+    int last_output_voltage;    // 上次输出电压
+    
+    // 滤波参数
+    static const int FILTER_WINDOW_SIZE = 8;  // 滑动窗口大小
+    static constexpr float EMA_ALPHA = 0.3f;  // EMA系数
+    static const int MAX_VOLTAGE_JUMP = 100;  // 最大电压跳变 (mV)
+    static const int OUTPUT_DIVIDER = 4;      // 输出分频
+    
+    // 校准参数
+    int min_voltage;            // 最小电压 (mV)
+    int max_voltage;            // 最大电压 (mV)
+    int observed_min;           // 观察到的最大电压
+    int observed_max;           // 观察到的最大电压
+    static const int VOLTAGE_MIN_LIMIT = 2000;  // 校准电压下限 (mV)
+    static const int VOLTAGE_MAX_LIMIT = 5000;  // 校准电压上限 (mV)
+    static const int CALIBRATION_INTERVAL = 300000; // 校准间隔 (5分钟)
+    static const int STABLE_COUNT = 100;       // 稳定计数阈值
+    
+    // 内部状态
+    int voltage_buffer[FILTER_WINDOW_SIZE];  // 电压缓冲区
+    int buffer_index;                        // 缓冲区索引
+    int output_counter;                      // 输出计数器
+    unsigned long last_calibration;          // 上次校准时间
+    int stable_count;                        // 稳定计数
+    
+    // 调试控制
+    bool _debug;
+    
+    // 私有方法
+    void loadCalibration();
+    void saveCalibration();
+    void updateCalibration();
+    int calculatePercentage(int voltage) const;  // 添加const修饰符
+    
+    // 充电状态防抖
+    bool updateChargingState();
+    
+    // 常量定义
     static const int VOLTAGE_LEVELS[];
     static const int PERCENT_LEVELS[];
     static const int LEVEL_COUNT;
     
-    const int pin;
-    const int charging_pin; // 新增：充电状态引脚
-    bool _is_charging;      // 新增：充电状态缓存
-
-    int min_voltage;
-    int max_voltage;
-    int voltage;        // 简单平均滤波后的电压
-
-    // 滤波相关
-    int voltage_buffer[FILTER_WINDOW_SIZE];
-    int buffer_index;
-    int ema_voltage;         // 指数移动平均
-    int last_output_voltage; // 最后输出电压
-    int stable_voltage;      // 稳定电压
-    int output_counter;      // 输出分频计数器
-
-    // 调试相关
-    bool _debug;
+    // 调试输出
     void debugPrint(const String& message);
-    
-    // 校准相关
-    static constexpr int VOLTAGE_MAX_LIMIT = 4500;
-    static constexpr int VOLTAGE_MIN_LIMIT = 2500;
-    static constexpr int CALIBRATION_INTERVAL = 60000;
-    static constexpr int STABLE_COUNT = 10;
-    
-    int observed_max;
-    int observed_min;
-    unsigned long last_calibration;
-    int stable_count;
-    
-    void updateCalibration();
-    void loadCalibration();
-    void saveCalibration();
-    int calculatePercentage(int voltage);
 };
 
 extern BAT bat;
 
-#endif
+#endif // BAT_H

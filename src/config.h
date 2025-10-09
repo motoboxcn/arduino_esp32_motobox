@@ -24,7 +24,7 @@
 #endif
 
 #define ENABLE_LED
-#define LED_DEBUG_ENABLED true // LED调试已启用
+#define LED_DEBUG_ENABLED false // LED调试已禁用（优化性能）
 
 // 轻量化版本 - 移除TFT和BLE功能
 // #define ENABLE_TFT  // 轻量化版本不需要显示屏
@@ -107,6 +107,9 @@
 #define GPS_MIN_FREE_SPACE_MB        50      // 最小可用空间（MB）
 #define GPS_AUTO_CLEANUP_DAYS        30      // 自动清理天数
 #define GPS_LOGGER_DEBUG_ENABLED      false
+#define DATA_COLLECTOR_DEBUG_ENABLED  false  // 数据采集器调试输出
+#define IMU_DEBUG_ENABLED             false  // IMU调试输出
+#define COMPASS_DEBUG_ENABLED          false  // 指南针调试输出
 #endif
 
 // 融合定位功能
@@ -138,5 +141,13 @@
 #define MOTO_MAX_DECELERATION            12.0f   // 最大减速度（m/s²）
 #define MOTO_MAX_STEERING_ANGLE          1.0f    // 最大转向角（弧度）
 #endif // ENABLE_FUSION_LOCATION
+
+// 电池管理优化配置
+#define BATTERY_VOLTAGE_FILTER_ENABLED    true    // 启用电压滤波
+#define BATTERY_ADC_SAMPLE_COUNT          8       // ADC采样次数
+#define BATTERY_ADC_SAMPLE_DELAY          5       // ADC采样间隔（毫秒）
+#define BATTERY_VOLTAGE_THRESHOLD         100     // 电压变化阈值（毫伏）
+#define BATTERY_CALIBRATION_ENABLED       true    // 启用电压校准
+#define BATTERY_DEBUG_ENABLED             false   // 电池调试输出
 
 #endif // CONFIG_H

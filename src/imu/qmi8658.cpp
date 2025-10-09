@@ -324,6 +324,7 @@ void IMU::loop()
     bool gyro_success = qmi.getGyroscope(new_gyro_x, new_gyro_y, new_gyro_z);
     
     // 每5秒输出一次调试信息
+    #ifdef IMU_DEBUG_ENABLED
     if (millis() - lastDebugTime > 5000) {
         Serial.printf("[IMU DEBUG] Accel read: %s, Gyro read: %s\n", 
                      accel_success ? "OK" : "FAIL", 
@@ -335,6 +336,7 @@ void IMU::loop()
         
         lastDebugTime = millis();
     }
+    #endif
     
     // 更新数据
     imu_data.accel_x = new_accel_x;
@@ -401,7 +403,16 @@ bool IMU::detectMotion()
     if (sampleIndex >= sampleWindow)
     {
         float averageDelta = accumulatedDelta / sampleWindow;
-        Serial.printf("[IMU] 运动检测阈值: %f, 平均加速度变化: %f\n", motionThreshold, averageDelta);
+        
+        // 减少调试输出频率，只在调试模式下且需要时才输出
+        #ifdef IMU_DEBUG_ENABLED
+        static unsigned long last_motion_debug = 0;
+        if (millis() - last_motion_debug > 10000) { // 每10秒输出一次
+            Serial.printf("[IMU] 运动检测阈值: %f, 平均加速度变化: %f\n", motionThreshold, averageDelta);
+            last_motion_debug = millis();
+        }
+        #endif
+        
         bool motionDetected = averageDelta > (motionThreshold * 0.8);
         accumulatedDelta = 0;
         sampleIndex = 0;

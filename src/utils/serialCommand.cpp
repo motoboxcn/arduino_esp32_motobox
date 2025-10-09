@@ -4,15 +4,6 @@
 #include "power/PowerModeManager.h"
 #endif
 
-#ifdef ENABLE_GPS_LOGGER
-#include "SD/GPSLogger.h"
-extern GPSLogger gpsLogger;
-#endif
-
-#ifdef ENABLE_SDCARD
-extern SDManager sdManager;
-#endif
-
 // ===================== 串口命令处理函数 =====================
 /**
  * 处理串口输入命令
@@ -259,28 +250,6 @@ void handleSerialCommand()
             }
 #else
             Serial.println("音频功能未启用");
-#endif
-        }
-        else if (command.startsWith("sd."))
-        {
-#ifdef ENABLE_SDCARD
-            // 处理SD卡命令
-            if (!sdManager.handleSerialCommand(command)) {
-                Serial.println("❌ SD卡命令处理失败: " + command);
-            }
-#else
-            Serial.println("SD卡功能未启用");
-#endif
-        }
-        else if (command.startsWith("gps") || command.startsWith("gs") || command.startsWith("gt") || command.startsWith("ge") || command.startsWith("gl") || command.startsWith("gi") || command.startsWith("gh"))
-        {
-#ifdef ENABLE_GPS_LOGGER
-            // 处理GPS记录器命令
-            if (!gpsLogger.handleSerialCommand(command)) {
-                Serial.println("❌ GPS命令处理失败: " + command);
-            }
-#else
-            Serial.println("GPS记录器功能未启用");
 #endif
         }
         else if (command == "restart" || command == "reboot")

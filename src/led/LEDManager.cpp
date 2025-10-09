@@ -79,13 +79,8 @@ void LEDManager::setLEDState(LEDMode mode, LEDColor color, uint8_t brightness) {
 }
 
 void LEDManager::updateChargingStatus() {
-    // 只有在自动充电显示模式下才进行状态检测
-    if (!_autoChargingMode) {
-        LED_DEBUG_THROTTLED(10000, "自动充电显示模式已禁用，跳过状态检测\n");
-        return;
-    }
-    
-    bool currentChargingState = bat.isCharging();
+    // 获取当前充电状态
+    bool currentChargingState = device_state.is_charging;
     
     // 检测充电状态变化
     if (currentChargingState != _lastChargingState) {
@@ -95,6 +90,7 @@ void LEDManager::updateChargingStatus() {
                         _lastChargingState ? "充电中" : "未充电",
                         currentChargingState ? "充电中" : "未充电");
         
+        // 只在状态真正变化时才更新LED显示
         setChargingDisplay(currentChargingState);
         
         Serial.printf("[LEDManager] 充电状态变化: %s\n", 
@@ -118,33 +114,53 @@ void LEDManager::setChargingDisplay(bool isCharging) {
     LEDColor oldColor = _color;
     uint8_t oldBrightness = _brightness;
     
+    // 计算新的LED状态
+    LEDMode newMode;
+    LEDColor newColor;
+    uint8_t newBrightness;
+    
     if (isCharging) {
         // 充电中：绿灯呼吸效果，亮度适中
-        _mode = LED_BREATH;
-        _color = LED_COLOR_GREEN;
-        _brightness = 50; // 约20%亮度用于呼吸效果
+        newMode = LED_BREATH;
+        newColor = LED_COLOR_GREEN;
+        newBrightness = 50; // 约20%亮度用于呼吸效果
         LED_DEBUG_PRINTLN("充电中 -> 设置为绿灯呼吸效果");
     } else {
         // 未充电：绿色2%亮度常亮
-        _mode = LED_ON;
-        _color = LED_COLOR_GREEN;
-        _brightness = 5; // 2%亮度
+        newMode = LED_ON;
+        newColor = LED_COLOR_GREEN;
+        newBrightness = 5; // 2%亮度
         LED_DEBUG_PRINTLN("未充电 -> 设置为绿色低亮度常亮");
     }
     
-    // 记录变化
-    if (oldMode != _mode) {
-        LED_DEBUG_STATE_CHANGE(ledModeToString(oldMode), ledModeToString(_mode), "充电显示模式");
-    }
-    if (oldColor != _color) {
-        LED_DEBUG_STATE_CHANGE(ledColorToString(oldColor), ledColorToString(_color), "充电显示颜色");
-    }
-    if (oldBrightness != _brightness) {
-        LED_DEBUG_PRINTF("充电显示亮度变化: %d -> %d\n", oldBrightness, _brightness);
+    // 只有当状态真正需要变化时才更新
+    bool needsUpdate = false;
+    
+    if (oldMode != newMode) {
+        _mode = newMode;
+        LED_DEBUG_STATE_CHANGE(ledModeToString(oldMode), ledModeToString(newMode), "充电显示模式");
+        needsUpdate = true;
     }
     
-    device_state.led_mode = _mode;
-    updateLED();
+    if (oldColor != newColor) {
+        _color = newColor;
+        LED_DEBUG_STATE_CHANGE(ledColorToString(oldColor), ledColorToString(newColor), "充电显示颜色");
+        needsUpdate = true;
+    }
+    
+    if (oldBrightness != newBrightness) {
+        _brightness = newBrightness;
+        LED_DEBUG_PRINTF("充电显示亮度变化: %d -> %d\n", oldBrightness, newBrightness);
+        needsUpdate = true;
+    }
+    
+    // 只在需要时才更新LED硬件
+    if (needsUpdate) {
+        device_state.led_mode = _mode;
+        updateLED();
+    } else {
+        LED_DEBUG_PRINTLN("LED状态无需更新，跳过硬件更新");
+    }
     
     LED_DEBUG_EXIT("LEDManager::setChargingDisplay");
 }

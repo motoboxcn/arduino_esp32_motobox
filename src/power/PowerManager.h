@@ -10,9 +10,6 @@
 #include "utils/PreferencesUtils.h"
 #include "config.h"
 
-#ifdef ENABLE_SDCARD
-#include "SD/SDManager.h"
-#endif
 
 // 简化的电源状态枚举
 enum PowerState {

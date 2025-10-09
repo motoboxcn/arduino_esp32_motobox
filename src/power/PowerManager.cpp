@@ -5,9 +5,7 @@
 #include "esp_bt.h"
 #include "esp_bt_main.h"
 #include "esp_task_wdt.h"
-#include "SD.h"
 #include "SPI.h"
-#include "audio/AudioManager.h"
 
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -17,9 +15,6 @@
 #include "led/PWMLED.h"
 #endif
 
-#ifdef ENABLE_SDCARD
-#include "SD/SDManager.h"
-#endif
 
 // 初始化静态变量
 #ifdef ENABLE_SLEEP
@@ -201,12 +196,6 @@ void PowerManager::enterLowPowerMode()
     // 配置电源域
     configurePowerDomains();
     
-    // 播放休眠音效
-    Serial.println("[电源管理] 🔊 播放休眠音效...");
-    extern AudioManager audioManager;
-    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
-    delay(1000); // 等待音效播放完成
-    
     Serial.println("[电源管理] 💤 进入深度睡眠");
     Serial.flush();
     delay(100);
@@ -332,18 +321,6 @@ void PowerManager::disablePeripherals()
     extern PWMLED pwmLed;
     pwmLed.setBrightness(0);
     pwmLed.deinit(); // 完全关闭PWM
-    #endif
-    
-    // 4. 安全关闭 SD 卡
-    #ifdef ENABLE_SDCARD
-    Serial.println("[电源管理] 关闭 SD 卡...");
-    // 检查 SD 卡是否已初始化
-    if (sdManager.isInitialized()) {
-        sdManager.end();
-        Serial.println("[电源管理] ✅ SD 卡已关闭");
-    } else {
-        Serial.println("[电源管理] SD 卡未初始化，跳过关闭");
-    }
     #endif
     
     // 5. 关闭 TFT 显示屏（可能是高功耗源）
@@ -522,16 +499,6 @@ void PowerManager::testSafeEnterSleep()
     // 最后的准备
     Serial.println("[测试] 最后准备...");
     Serial.flush();
-    delay(1000);
-    
-    // 播放休眠音效
-    Serial.println("[测试] 🔊 播放休眠音效...");
-    extern AudioManager audioManager;
-    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
-    delay(1000); // 等待音效播放完成
-    
-    Serial.println("[测试] 💤 进入深度睡眠（10秒后自动唤醒）");
-    Serial.flush();
     
     // 进入深度睡眠
     esp_deep_sleep_start();
@@ -570,10 +537,6 @@ void PowerManager::handleVehicleStateChange()
 void PowerManager::disableSDCard()
 {
     Serial.println("[电源管理] 关闭SD卡...");
-    
-    // 1. 卸载SD卡文件系统
-    SD.end();
-    Serial.println("[电源管理] SD卡文件系统已卸载");
     
     // 2. 关闭SPI总线
     SPI.end();
@@ -630,11 +593,5 @@ void PowerManager::enableSDCard()
     
     // 2. 重新初始化SPI
     SPI.begin();
-    
-    // 3. 重新挂载SD卡
-    if (SD.begin()) {
-        Serial.println("[电源管理] ✅ SD卡重新初始化成功");
-    } else {
-        Serial.println("[电源管理] ❌ SD卡重新初始化失败");
-    }
+   
 }

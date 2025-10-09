@@ -6,7 +6,11 @@ DataCollector::DataCollector() {
     current_mode = MODE_NORMAL;
     collecting = false;
     transmission_enabled = true;
+    #ifdef DATA_COLLECTOR_DEBUG_ENABLED
+    debug_enabled = DATA_COLLECTOR_DEBUG_ENABLED;
+    #else
     debug_enabled = false;
+    #endif
     
     last_collection_time = 0;
     last_transmission_time = 0;
@@ -49,15 +53,40 @@ void DataCollector::loop() {
         
         last_collection_time = now;
         
-        if (debug_enabled) {
+        // 减少调试输出频率，只在调试模式下且需要时才输出
+        if (debug_enabled && (now % 10000 < collection_interval)) {
             debugPrint("数据采集完成");
         }
     }
     
-    // 数据传输
+    // 数据传输（带重试机制）
     if (transmission_enabled && (now - last_transmission_time >= transmission_interval)) {
-        transmitData();
+        int retry_count = 0;
+        bool success = false;
+        
+        // 重试机制
+        while (!success && retry_count < 3) {
+            success = transmitData();
+            if (!success) {
+                retry_count++;
+                if (retry_count < 3) {
+                    delay(1000); // 重试前等待1秒
+                }
+            }
+        }
+        
         last_transmission_time = now;
+        
+        // 根据传输结果输出相应信息
+        if (success) {
+            if (debug_enabled && (now % 30000 < transmission_interval)) {
+                debugPrint("数据传输完成");
+            }
+        } else {
+            if (debug_enabled) {
+                debugPrint("数据传输失败，已重试" + String(retry_count) + "次");
+            }
+        }
     }
 }
 
@@ -324,8 +353,8 @@ String DataCollector::getDataJSON() {
     return json;
 }
 
-void DataCollector::transmitData() {
-    if (!transmission_enabled) return;
+bool DataCollector::transmitData() {
+    if (!transmission_enabled) return false;
     
     String json = getDataJSON();
     String topic = generateMQTTTopic("telemetry");
@@ -337,8 +366,10 @@ void DataCollector::transmitData() {
         if (current_mode == MODE_NORMAL) {
             resetIMUStats();
         }
+        return true;
     } else {
         debugPrint("数据传输失败");
+        return false;
     }
 }
 

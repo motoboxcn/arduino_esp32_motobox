@@ -22,9 +22,7 @@
 #include "Air780EG.h"
 #include "utils/serialCommand.h"
 #include "utils/DataCollector.h"
-#include "ota/SDCardOTA.h"
-#include "SD/SDManager.h"
-#include "SD/GPSLogger.h"
+#include "ota/OTAManager.h"
 
 #ifdef BAT_PIN
 #include "bat/BAT.h"
@@ -58,19 +56,6 @@ extern Ml307AtModem ml307_at;
 
 #ifdef ENABLE_IMU
 #include "imu/qmi8658.h"
-#endif
-
-#ifdef ENABLE_SDCARD
-#include "SD/SDManager.h"
-#endif
-
-#ifdef ENABLE_GPS_LOGGER
-#include "SD/GPSLogger.h"
-extern GPSLogger gpsLogger;
-#endif
-
-#ifdef ENABLE_AUDIO
-#include "audio/AudioManager.h"
 #endif
 
 #include "version.h"
@@ -132,20 +117,6 @@ void taskSystem(void *parameter)
     {
       handleSerialCommand();
     }
-    // SD卡状态监控
-#ifdef ENABLE_SDCARD
-    static unsigned long lastSDCheckTime = 0;
-    unsigned long currentTime = millis();
-    // 每10秒更新一次SD卡状态
-    if (currentTime - lastSDCheckTime > 10000)
-    {
-      lastSDCheckTime = currentTime;
-      if (sdManager.isInitialized())
-      {
-        device_state.sdCardFreeMB = sdManager.getFreeSpaceMB();
-      }
-    }
-#endif
 
     delay(5);
   }
@@ -169,29 +140,6 @@ void taskDataProcessing(void *parameter)
 #ifdef USE_AIR780EG_GSM
     // 调用新库的主循环（处理URC、网络状态更新、GNSS数据更新等）
     air780eg.loop();
-#endif
-
-#ifdef ENABLE_SDCARD
-    // 数据记录到SD卡
-    unsigned long currentTime = millis();
-
-    // 记录GPS数据
-    if (device_state.gnssReady && device_state.sdCardReady &&
-        currentTime - lastGNSSRecordTime >= GPS_LOG_INTERVAL_MS)
-    {
-      lastGNSSRecordTime = currentTime;
-
-      // 记录到SD卡（原有方法）
-      sdManager.recordGPSData(air780eg.getGNSS().gnss_data);
-
-#ifdef ENABLE_GPS_LOGGER
-      // 使用GPS记录器记录数据
-      if (air780eg.getGNSS().gnss_data.is_fixed)
-      { // 有效GPS数据
-        gpsLogger.logGPSData(air780eg.getGNSS().gnss_data);
-      }
-#endif
-    }
 #endif
 
 #ifdef ENABLE_COMPASS
@@ -221,68 +169,8 @@ void setup()
   
   // 初始化功耗模式管理器
   #ifdef ENABLE_POWER_MODE_MANAGEMENT
-  powerModeManager.begin();
+    powerModeManager.begin();
   #endif
-
-  //================ SD卡初始化开始 ================
-#ifdef ENABLE_SDCARD
-  if (sdManager.begin())
-  {
-    Serial.println("[SD] SD卡初始化成功");
-
-    // 更新设备状态
-    device_state.sdCardReady = true;
-    device_state.sdCardSizeMB = sdManager.getTotalSpaceMB();
-    device_state.sdCardFreeMB = sdManager.getFreeSpaceMB();
-
-    // 保存设备信息
-    sdManager.saveDeviceInfo();
-
-    Serial.println("[SD] 设备信息已保存到SD卡");
-
-    // 初始化SD卡OTA升级功能
-    Serial.println("[SD] 初始化SD卡OTA升级");
-    sdCardOTA.begin();
-
-    // 检查并执行SD卡升级（如果需要）
-    Serial.println("[SD] 检查SD卡升级");
-    if (sdCardOTA.checkAndUpgrade())
-    {
-      Serial.println("[OTA] SD卡升级成功，设备将重启");
-      // 如果升级成功，设备会自动重启，不会执行到这里
-    }
-    else
-    {
-      String error = sdCardOTA.getLastError();
-      if (error.indexOf("未找到") < 0 && error.indexOf("不需要更新") < 0)
-      {
-        // 只有真正的错误才打印，文件不存在或不需要更新是正常情况
-        Serial.println("[OTA] SD卡升级检查: " + error);
-      }
-    }
-
-#ifdef ENABLE_GPS_LOGGER
-    // 初始化GPS记录器
-    if (gpsLogger.begin())
-    {
-      Serial.println("[GPS] GPS记录器初始化成功");
-      // 自动开始GPS记录会话
-      gpsLogger.startNewSession();
-      Serial.println("[GPS] 自动开始GPS记录会话");
-    }
-    else
-    {
-      Serial.println("[GPS] GPS记录器初始化失败");
-    }
-#endif
-  }
-  else
-  {
-    Serial.println("[SD] SD卡初始化失败");
-    device_state.sdCardReady = false;
-  }
-#endif
-  //================ SD卡初始化结束 ================
 
   device.begin();
 

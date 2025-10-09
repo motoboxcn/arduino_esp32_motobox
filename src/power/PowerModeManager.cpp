@@ -10,9 +10,6 @@
 #include "location/FusionLocationManager.h"
 #endif
 
-#ifdef ENABLE_AUDIO
-#include "audio/AudioManager.h"
-#endif
 
 #ifdef RTC_INT_PIN
 #include "power/ExternalPower.h"

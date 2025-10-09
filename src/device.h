@@ -17,13 +17,6 @@
 #endif
 #include "led/LEDManager.h"
 
-#ifdef ENABLE_SDCARD
-#include "SD/SDManager.h"
-#endif
-
-#ifdef ENABLE_AUDIO
-#include "audio/AudioManager.h"
-#endif
 
 #ifdef ENABLE_FUSION_LOCATION
 #include "location/FusionLocationManager.h"

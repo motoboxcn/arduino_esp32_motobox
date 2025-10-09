@@ -11,15 +11,7 @@
 extern Ml307Mqtt ml307Mqtt;
 #endif
 
-#ifdef ENABLE_SDCARD
-#include "SD/SDManager.h"
-extern SDManager sdManager;
-#endif
 
-#ifdef ENABLE_AUDIO
-#include "audio/AudioManager.h"
-extern AudioManager audioManager;
-#endif
 
 extern const VersionInfo &getVersionInfo();
 
@@ -234,17 +226,6 @@ void mqttMessageCallback(const String &topic, const String &payload)
             Serial.println("重启设备");
             ESP.restart();
         }
-#ifdef ENABLE_SDCARD
-        // 格式化存储卡
-        if (strcmp(cmd, "format_sdcard") == 0)
-        {
-            Serial.println("格式化存储卡");
-            if (!sdManager.handleSerialCommand("yes_format"))
-            {
-                Serial.println("格式化存储卡失败");
-            }
-        }
-#endif
         Serial.println("✅ 命令处理完成");
     }
     else

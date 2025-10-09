@@ -144,7 +144,7 @@ private:
     void collectCompassData();
     void collectSystemData();
     void updateIMUStatistics();
-    void transmitData();
+    bool transmitData();
     
     // MQTT传输
     bool publishToMQTT(const String& topic, const String& payload);

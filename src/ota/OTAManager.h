@@ -3,13 +3,11 @@
 
 #include <Arduino.h>
 #include <Update.h>
-#include <SD.h>
 #include <HTTPClient.h>
 #include <ArduinoJson.h>
 #include <WiFiClientSecure.h>
 #include "version.h"
 #include "bat/BAT.h"
-#include "audio/VoicePrompt.h"
 
 // OTA升级状态枚举
 enum OTAStatus {
@@ -37,9 +35,6 @@ public:
     // 初始化
     void begin();
     
-    // SD卡升级相关
-    bool checkSDCardUpgrade();
-    bool performSDCardUpgrade();
     
     // MQTT在线升级相关
     void setupMQTTOTA();
@@ -69,23 +64,16 @@ private:
     String otaTopicStatus;
     void (*mqttPublishCallback)(const char*, const char*);
     
-    // SD卡升级相关
-    String firmwareFileName;
-    String versionFileName;
-    String checksumFileName;
     
     // 升级条件检查
     bool checkBatteryLevel();
     bool checkVersionNewer(String newVersion, String currentVersion);
-    bool checkFileExists(String filePath);
     bool checkAvailableSpace(size_t requiredSize);
     
     // 版本比较
     int compareVersions(String version1, String version2);
     
-    // SD卡操作
-    String readVersionFromSD();
-    String readChecksumFromSD();
+    // 固件验证
     bool verifyFirmwareChecksum(String expectedChecksum);
     
     // 在线升级操作
@@ -93,15 +81,11 @@ private:
     bool downloadFirmware(String url);
     
     // 升级执行
-    bool installFirmware(File& firmwareFile);
     bool installFirmwareFromURL(String url);
     
     // 状态报告
     void reportStatus(String status, int progress, String message = "");
     void updateProgress(int progress);
-    
-    // 语音提醒
-    void playUpgradePrompt(String message);
     
     // 工具函数
     String formatBytes(size_t bytes);

@@ -1,5 +1,6 @@
 #include "BAT.h"
 #include "config.h"
+#include "utils/PreferencesUtils.h"
 
 BAT bat(BAT_PIN, CHARGING_STATUS_PIN);
 
@@ -7,6 +8,8 @@ BAT::BAT(int adc_pin, int charging_pin)
     : pin(adc_pin),
       charging_pin(charging_pin),
       _is_charging(false),
+      _last_stable_charging(false),
+      _charging_state_count(0),
       min_voltage(2800),
       max_voltage(4200),
       buffer_index(0),
@@ -114,11 +117,50 @@ void BAT::updateCalibration()
     }
 }
 
+/**
+ * @brief 更新充电状态，带防抖机制
+ * @return true: 状态发生变化, false: 状态未变化
+ */
+bool BAT::updateChargingState() {
+    bool current_reading = (digitalRead(charging_pin) == LOW);
+    
+    // 如果读取值与当前状态不同，增加计数器
+    if (current_reading != _is_charging) {
+        _charging_state_count++;
+        
+        // 如果连续多次读取都不同，确认状态变化
+        if (_charging_state_count >= CHARGING_DEBOUNCE_COUNT) {
+            _last_stable_charging = _is_charging;
+            _is_charging = current_reading;
+            _charging_state_count = 0;
+            
+            if (_debug) {
+                Serial.printf("[BAT] 充电状态变化: %s -> %s (防抖确认)\n", 
+                            _last_stable_charging ? "充电中" : "未充电",
+                            _is_charging ? "充电中" : "未充电");
+            }
+            
+            return true; // 状态发生变化
+        }
+    } else {
+        // 如果读取值与当前状态相同，重置计数器
+        _charging_state_count = 0;
+    }
+    
+    return false; // 状态未变化
+}
+
 void BAT::loop()
 {
-    // 更新充电状态
-    _is_charging = (digitalRead(charging_pin) == LOW);
+    // 更新充电状态（带防抖）
+    bool charging_changed = updateChargingState();
     device_state.is_charging = _is_charging;
+
+    // 只在充电状态真正变化时才输出调试信息
+    if (charging_changed && _debug) {
+        Serial.printf("[BAT] 充电状态已稳定: %s\n", 
+                     _is_charging ? "充电中" : "未充电");
+    }
 
     static constexpr float VOLTAGE_MULTIPLIER = 2.0f; // 电压倍数常量
     static constexpr int ADC_MAX_VALUE = 4095;        // ADC最大值
@@ -222,7 +264,7 @@ const int BAT::VOLTAGE_LEVELS[] = {4200, 4000, 3800, 3600, 3400, 3200, 3000, 280
 const int BAT::PERCENT_LEVELS[] = {100,   90,   80,   60,   45,   30,   15,    0};
 const int BAT::LEVEL_COUNT = 8;  // 数组大小固定为8
 
-int BAT::calculatePercentage(int voltage) {
+int BAT::calculatePercentage(int voltage) const {
     if (voltage >= VOLTAGE_LEVELS[0]) return 100;
     if (voltage <= VOLTAGE_LEVELS[LEVEL_COUNT-1]) return 0;
     
@@ -239,6 +281,6 @@ int BAT::calculatePercentage(int voltage) {
 }
 
 // 新增实现
-bool BAT::isCharging() {
-    return _is_charging;
+int BAT::getPercentage() const {
+    return calculatePercentage(stable_voltage);
 }

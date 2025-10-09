@@ -135,11 +135,13 @@ void Compass::loop() {
     // 更新数据
     update();
 
-    // 定期打印调试信息
-    if (millis() - _lastDebugPrintTime > 2000) {
+    // 定期打印调试信息（降低频率）
+    #ifdef COMPASS_DEBUG_ENABLED
+    if (millis() - _lastDebugPrintTime > 10000) { // 改为10秒输出一次
         _lastDebugPrintTime = millis();
         printCompassData();
     }
+    #endif
 }
 
 float Compass::getHeading() {

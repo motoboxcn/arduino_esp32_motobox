@@ -7,10 +7,7 @@ OTAManager otaManager;
 OTAManager::OTAManager() 
     : currentStatus(OTA_IDLE), 
       upgradeProgress(0),
-      mqttPublishCallback(nullptr),
-      firmwareFileName("firmware.bin"),
-      versionFileName("version.txt"),
-      checksumFileName("checksum.txt") {
+      mqttPublishCallback(nullptr) {
     
     // 获取设备ID和当前版本
     deviceId = "ESP32_" + String((uint32_t)ESP.getEfuseMac(), HEX);
@@ -28,87 +25,8 @@ void OTAManager::begin() {
     logMessage("当前版本: " + currentVersion);
     logMessage("最低电池要求: " + String(OTA_BATTERY_MIN_LEVEL) + "%");
     
-    // 启动时检查SD卡升级
-    if (checkSDCardUpgrade()) {
-        logMessage("检测到SD卡升级文件");
-    }
-}
-
-bool OTAManager::checkSDCardUpgrade() {
-    if (!SD.begin()) {
-        logMessage("SD卡未检测到");
-        return false;
-    }
-    
-    // 检查固件文件是否存在
-    if (!checkFileExists("/" + firmwareFileName)) {
-        logMessage("SD卡中无固件文件");
-        return false;
-    }
-    
-    // 读取版本信息
-    String sdVersion = readVersionFromSD();
-    if (sdVersion.isEmpty()) {
-        logMessage("无法读取SD卡版本信息");
-        return false;
-    }
-    
-    logMessage("SD卡固件版本: " + sdVersion);
-    
-    // 检查升级条件
-    UpgradeCondition condition = checkUpgradeConditions(sdVersion);
-    
-    if (condition.batteryOK && condition.versionNewer && condition.fileExists) {
-        voicePrompt.playUpgradePrompt("检测到SD卡新固件，电池电量充足，开始升级");
-        return performSDCardUpgrade();
-    } else {
-        String message = "SD卡升级条件不满足: " + condition.message;
-        logMessage(message);
-        voicePrompt.playUpgradePrompt(message);
-        return false;
-    }
-}
-
-bool OTAManager::performSDCardUpgrade() {
-    currentStatus = OTA_INSTALLING;
-    updateProgress(0);
-    
-    voicePrompt.playUpgradePrompt("正在从SD卡升级固件，请勿断电");
-    
-    File firmware = SD.open("/" + firmwareFileName);
-    if (!firmware) {
-        logMessage("无法打开固件文件");
-        voicePrompt.playUpgradePrompt("升级失败：无法读取固件文件");
-        currentStatus = OTA_FAILED;
-        return false;
-    }
-    
-    // 验证校验和
-    String expectedChecksum = readChecksumFromSD();
-    if (!expectedChecksum.isEmpty() && !verifyFirmwareChecksum(expectedChecksum)) {
-        logMessage("固件校验失败");
-        voicePrompt.playUpgradePrompt("升级失败：固件校验失败");
-        firmware.close();
-        currentStatus = OTA_FAILED;
-        return false;
-    }
-    
-    // 执行升级
-    bool success = installFirmware(firmware);
-    firmware.close();
-    
-    if (success) {
-        voicePrompt.playUpgradePrompt("升级成功，即将重启");
-        currentStatus = OTA_SUCCESS;
-        updateProgress(100);
-        delay(2000);
-        ESP.restart();
-        return true;
-    } else {
-        voicePrompt.playUpgradePrompt("升级失败");
-        currentStatus = OTA_FAILED;
-        return false;
-    }
+    // 启动时检查在线升级
+    logMessage("OTA管理器已就绪，等待MQTT连接后检查更新");
 }
 
 void OTAManager::setupMQTTOTA() {
@@ -130,13 +48,17 @@ void OTAManager::handleMQTTMessage(String topic, String payload) {
         String serverVersion = doc["latest_version"];
         String downloadUrl = doc["download_url"];
         bool forceUpdate = doc["force_update"] | false;
+        String releaseNotes = doc["release_notes"] | "";
         
         logMessage("收到版本检查响应: " + serverVersion);
+        if (!releaseNotes.isEmpty()) {
+            logMessage("更新说明: " + releaseNotes);
+        }
         
         UpgradeCondition condition = checkUpgradeConditions(serverVersion);
         
         if ((condition.versionNewer || forceUpdate) && condition.batteryOK) {
-            voicePrompt.playUpgradePrompt("检测到在线更新，电池电量充足");
+            logMessage("检测到在线更新，电池电量充足，开始升级");
             startOnlineDownload(downloadUrl, serverVersion);
         } else {
             String message = "在线升级条件不满足: " + condition.message;
@@ -152,6 +74,8 @@ void OTAManager::checkForUpdates() {
         return;
     }
     
+    logMessage("检查在线更新...");
+    
     DynamicJsonDocument doc(512);
     doc["device_id"] = deviceId;
     doc["current_version"] = currentVersion;
@@ -164,6 +88,8 @@ void OTAManager::checkForUpdates() {
     if (mqttPublishCallback) {
         mqttPublishCallback(otaTopicCheck.c_str(), message.c_str());
         logMessage("发送版本检查请求");
+    } else {
+        logMessage("MQTT回调未设置，无法发送版本检查请求");
     }
 }
 
@@ -171,7 +97,7 @@ UpgradeCondition OTAManager::checkUpgradeConditions(String newVersion) {
     UpgradeCondition condition;
     condition.batteryOK = checkBatteryLevel();
     condition.versionNewer = newVersion.isEmpty() ? false : checkVersionNewer(newVersion, currentVersion);
-    condition.fileExists = checkFileExists("/" + firmwareFileName);
+    condition.fileExists = true; // MQTT升级不需要检查本地文件
     condition.spaceAvailable = checkAvailableSpace(1024 * 1024); // 1MB最小空间
     
     String message = "";
@@ -180,9 +106,6 @@ UpgradeCondition OTAManager::checkUpgradeConditions(String newVersion) {
     }
     if (!condition.versionNewer && !newVersion.isEmpty()) {
         message += "版本不需要更新; ";
-    }
-    if (!condition.fileExists) {
-        message += "固件文件不存在; ";
     }
     if (!condition.spaceAvailable) {
         message += "存储空间不足; ";
@@ -208,13 +131,10 @@ bool OTAManager::checkVersionNewer(String newVersion, String currentVersion) {
     return compareVersions(newVersion, currentVersion) > 0;
 }
 
-bool OTAManager::checkFileExists(String filePath) {
-    return SD.exists(filePath);
-}
-
 bool OTAManager::checkAvailableSpace(size_t requiredSize) {
     // 检查可用的Flash空间
     size_t freeSpace = ESP.getFreeSketchSpace();
+    logMessage("可用Flash空间: " + formatBytes(freeSpace));
     return freeSpace >= requiredSize;
 }
 
@@ -244,28 +164,6 @@ int OTAManager::compareVersions(String version1, String version2) {
     return patch1 - patch2;
 }
 
-String OTAManager::readVersionFromSD() {
-    File versionFile = SD.open("/" + versionFileName);
-    if (versionFile) {
-        String version = versionFile.readString();
-        versionFile.close();
-        version.trim();
-        return version;
-    }
-    return "";
-}
-
-String OTAManager::readChecksumFromSD() {
-    File checksumFile = SD.open("/" + checksumFileName);
-    if (checksumFile) {
-        String checksum = checksumFile.readString();
-        checksumFile.close();
-        checksum.trim();
-        return checksum;
-    }
-    return "";
-}
-
 bool OTAManager::verifyFirmwareChecksum(String expectedChecksum) {
     // 这里应该实现MD5或SHA256校验
     // 简化实现，实际项目中需要完整的校验逻辑
@@ -277,38 +175,43 @@ void OTAManager::startOnlineDownload(String url, String version) {
     currentStatus = OTA_DOWNLOADING;
     updateProgress(0);
     
-    voicePrompt.playUpgradePrompt("开始下载在线固件");
+    logMessage("开始下载在线固件，请勿断电");
     reportStatus("downloading", 0, "开始下载固件");
     
     if (downloadFirmware(url)) {
-        voicePrompt.playUpgradePrompt("下载完成，开始安装");
+        logMessage("下载完成，开始安装");
         if (installFirmwareFromURL(url)) {
-            voicePrompt.playUpgradePrompt("升级成功，即将重启");
+            logMessage("升级成功，即将重启");
             currentStatus = OTA_SUCCESS;
             reportStatus("success", 100, "升级成功");
             delay(2000);
             ESP.restart();
         } else {
-            voicePrompt.playUpgradePrompt("安装失败");
+            logMessage("安装失败");
             currentStatus = OTA_FAILED;
             reportStatus("failed", 0, "安装失败");
         }
     } else {
-        voicePrompt.playUpgradePrompt("下载失败");
+        logMessage("下载失败");
         currentStatus = OTA_FAILED;
         reportStatus("failed", 0, "下载失败");
     }
 }
 
 bool OTAManager::downloadFirmware(String url) {
+    logMessage("开始下载固件: " + url);
+    
     HTTPClient http;
     http.begin(url);
     http.setTimeout(OTA_DOWNLOAD_TIMEOUT);
+    http.addHeader("User-Agent", "ESP32-MotoBox-OTA/1.0");
     
     int httpCode = http.GET();
     
     if (httpCode == HTTP_CODE_OK) {
         int contentLength = http.getSize();
+        logMessage("固件大小: " + formatBytes(contentLength));
+        
         WiFiClient* stream = http.getStreamPtr();
         
         if (Update.begin(contentLength)) {
@@ -325,9 +228,13 @@ bool OTAManager::downloadFirmware(String url) {
                     int progress = (written * 100) / contentLength;
                     updateProgress(progress);
                     
-                    if (progress % 10 == 0) { // 每10%播放一次进度提示
-                        voicePrompt.playUpgradePrompt("下载进度: " + String(progress) + "%");
+                    if (progress % 20 == 0 && progress > 0) { // 每20%播放一次进度提示
+                        logMessage("下载进度: " + String(progress) + "%");
+                        reportStatus("downloading", progress, "下载进度: " + String(progress) + "%");
                     }
+                    
+                    // 看门狗喂狗
+                    yield();
                 }
                 delay(1);
             }
@@ -336,51 +243,30 @@ bool OTAManager::downloadFirmware(String url) {
                 logMessage("固件下载完成: " + formatBytes(written));
                 http.end();
                 return true;
+            } else {
+                logMessage("下载不完整: " + formatBytes(written) + "/" + formatBytes(contentLength));
             }
+        } else {
+            logMessage("OTA升级初始化失败: " + String(Update.errorString()));
         }
+    } else {
+        logMessage("HTTP请求失败: " + String(httpCode));
     }
     
     http.end();
     return false;
 }
 
-bool OTAManager::installFirmware(File& firmwareFile) {
-    size_t fileSize = firmwareFile.size();
-    
-    if (!Update.begin(fileSize)) {
-        logMessage("OTA开始失败: " + String(Update.errorString()));
-        return false;
-    }
-    
-    size_t written = 0;
-    uint8_t buffer[1024];
-    
-    while (firmwareFile.available()) {
-        size_t readBytes = firmwareFile.read(buffer, sizeof(buffer));
-        written += Update.write(buffer, readBytes);
-        
-        // 更新进度
-        int progress = (written * 100) / fileSize;
-        updateProgress(progress);
-        
-        if (progress % 20 == 0) { // 每20%播放一次进度提示
-            voicePrompt.playUpgradePrompt("安装进度: " + String(progress) + "%");
-        }
-    }
-    
+bool OTAManager::installFirmwareFromURL(String url) {
+    // 这个函数在downloadFirmware中已经处理了安装
+    // 这里只是为了接口完整性
     if (Update.end(true)) {
-        logMessage("固件安装成功: " + formatBytes(written));
+        logMessage("固件安装成功");
         return true;
     } else {
         logMessage("固件安装失败: " + String(Update.errorString()));
         return false;
     }
-}
-
-bool OTAManager::installFirmwareFromURL(String url) {
-    // 这个函数在downloadFirmware中已经处理了安装
-    // 这里只是为了接口完整性
-    return Update.end(true);
 }
 
 void OTAManager::reportStatus(String status, int progress, String message) {
