@@ -52,6 +52,10 @@
 #define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
 #define AIR780EG_LOG_VERBOSE_ENABLED false
 
+// GNSS查询间隔配置（优化串口资源使用）
+#define GNSS_UPDATE_INTERVAL_VALID    3000   // GNSS有效时3秒查询一次
+#define GNSS_UPDATE_INTERVAL_INVALID  10000  // GNSS无效时10秒查询一次
+
 // MQTT配置
 #define MQTT_BROKER                  "222.186.32.152"
 #define MQTT_PORT                    32571

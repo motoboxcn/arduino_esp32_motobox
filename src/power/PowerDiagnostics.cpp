@@ -53,22 +53,13 @@ void PowerDiagnostics::printHardwarePowerAnalysis() {
     Serial.println("  - IMU 传感器: ~0.5-2mA");
     #endif
     
-    // 音频模块
-    #ifdef ENABLE_AUDIO
-    Serial.println("  - 音频模块: ~5-20mA (如果未关闭)");
-    #endif
-    
     Serial.println("\n⚠️  可能的高功耗源:");
     Serial.println("  1. TFT 显示屏背光或驱动未关闭");
-    Serial.println("  2. 音频放大器未断电");
-    Serial.println("  3. SD 卡未正确进入低功耗模式");
     Serial.println("  4. 外部上拉电阻导致的漏电流");
     Serial.println("  5. GPIO 配置不当导致的电流泄漏");
     
     Serial.println("\n🔧 建议排查步骤:");
     Serial.println("  1. 物理断开 TFT 显示屏连接");
-    Serial.println("  2. 断开 SD 卡连接");
-    Serial.println("  3. 断开音频模块连接");
     Serial.println("  4. 逐个断开外设，定位功耗源");
 }
 

@@ -225,12 +225,6 @@ void setup()
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
   xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
-
-#ifdef ENABLE_AUDIO
-  Serial.println("音频功能: ✅ 编译时已启用");
-#else
-  Serial.println("音频功能: ❌ 编译时未启用");
-#endif
   
   // 初始化数据采集器
   Serial.println("=== 数据采集器初始化 ===");

@@ -333,15 +333,6 @@ void PowerManager::disablePeripherals()
     Serial.println("[电源管理] ⚠️  TFT 关闭代码需要根据具体驱动实现");
     #endif
     
-    // 6. 关闭音频模块（可能是高功耗源）
-    #ifdef ENABLE_AUDIO
-    Serial.println("[电源管理] 关闭音频模块...");
-    // 关闭音频放大器和相关电路
-    // 需要在 AudioManager 中实现 powerOff() 方法
-    Serial.println("[电源管理] ⚠️  音频模块关闭代码需要实现");
-    audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
-    #endif
-    
     // 7. 关闭串口（除了调试串口）
     #ifdef GPS_RX_PIN
     Serial2.end();

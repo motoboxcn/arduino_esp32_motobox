@@ -54,7 +54,6 @@ void PowerModeManager::initializeDefaultConfigs() {
         .mqtt_device_status_interval_ms = 0,
         .fusion_update_interval_ms = 0,          // 不更新融合定位
         .system_check_interval_ms = 0,           // 不检查系统
-        .enable_audio_feedback = false,
         .idle_timeout_ms = 0,                    // 立即进入
         .enable_peripheral_power_save = true
     };
@@ -69,7 +68,6 @@ void PowerModeManager::initializeDefaultConfigs() {
         .mqtt_device_status_interval_ms = 60000, // 60秒上报状态
         .fusion_update_interval_ms = 500,        // 500ms融合定位更新
         .system_check_interval_ms = 2000,        // 2秒系统检查
-        .enable_audio_feedback = false,          // 关闭音频反馈省电
         .idle_timeout_ms = 120000,               // 2分钟无运动切换到休眠
         .enable_peripheral_power_save = true
     };
@@ -84,7 +82,6 @@ void PowerModeManager::initializeDefaultConfigs() {
         .mqtt_device_status_interval_ms = 30000, // 30秒上报状态
         .fusion_update_interval_ms = 100,        // 100ms融合定位更新
         .system_check_interval_ms = 1000,        // 1秒系统检查
-        .enable_audio_feedback = true,
         .idle_timeout_ms = 300000,               // 5分钟无运动切换到基本模式
         .enable_peripheral_power_save = false
     };
@@ -99,7 +96,6 @@ void PowerModeManager::initializeDefaultConfigs() {
         .mqtt_device_status_interval_ms = 15000, // 15秒上报状态
         .fusion_update_interval_ms = 50,         // 50ms融合定位更新（高频）
         .system_check_interval_ms = 500,         // 500ms系统检查
-        .enable_audio_feedback = true,
         .idle_timeout_ms = 60000,                // 1分钟无运动切换到正常模式
         .enable_peripheral_power_save = false
     };
@@ -397,22 +393,7 @@ void PowerModeManager::applySystemConfig(const PowerModeConfig& config) {
 }
 
 void PowerModeManager::playModeChangeSound(PowerMode newMode) {
-    #ifdef ENABLE_AUDIO
-    switch (newMode) {
-        case POWER_MODE_SLEEP:
-            audioManager.playAudioEvent(AUDIO_EVENT_SLEEP_MODE);
-            break;
-        case POWER_MODE_BASIC:
-            audioManager.playCustomBeep(800, 200); // 低音短促
-            break;
-        case POWER_MODE_NORMAL:
-            audioManager.playCustomBeep(1000, 300); // 中音中等
-            break;
-        case POWER_MODE_SPORT:
-            audioManager.playCustomBeep(1200, 400); // 高音较长
-            break;
-    }
-    #endif
+    return;
 }
 
 void PowerModeManager::printCurrentStatus() {
@@ -469,7 +450,6 @@ void PowerModeManager::printModeConfigs() {
         Serial.printf("  MQTT状态间隔: %lums\n", config.mqtt_device_status_interval_ms);
         Serial.printf("  融合定位间隔: %lums\n", config.fusion_update_interval_ms);
         Serial.printf("  系统检查间隔: %lums\n", config.system_check_interval_ms);
-        Serial.printf("  音频反馈: %s\n", config.enable_audio_feedback ? "启用" : "禁用");
         Serial.printf("  空闲超时: %lums (%lu秒)\n", config.idle_timeout_ms, config.idle_timeout_ms / 1000);
         Serial.printf("  外设省电: %s\n", config.enable_peripheral_power_save ? "启用" : "禁用");
     }

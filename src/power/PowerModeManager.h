@@ -31,7 +31,6 @@ struct PowerModeConfig {
     
     // 系统配置
     unsigned long system_check_interval_ms;     // 系统检查间隔
-    bool enable_audio_feedback;                 // 是否启用音频反馈
     
     // 功耗相关
     unsigned long idle_timeout_ms;              // 空闲超时时间

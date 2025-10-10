@@ -282,31 +282,6 @@ void Device::begin()
                       getVersionInfo().firmware_version, getVersionInfo().build_time);
     }
 
-#ifdef ENABLE_AUDIO
-    // 音频系统初始化
-    Serial.println("[音频] 开始初始化音频系统...");
-    Serial.printf("[音频] 引脚配置 - WS:%d, BCLK:%d, DATA:%d\n", IIS_S_WS_PIN, IIS_S_BCLK_PIN, IIS_S_DATA_PIN);
-
-    if (audioManager.begin())
-    {
-        device_state.audioReady = true;
-        Serial.println("[音频] ✅ 音频系统初始化成功!");
-        audioManager.playWelcomeVoice();
-    }
-    else
-    {
-        device_state.audioReady = false;
-        Serial.println("[音频] ❌ 音频系统初始化失败!");
-        Serial.println("[音频] 请检查:");
-        Serial.println("[音频] 1. 音频引脚是否正确定义");
-        Serial.println("[音频] 2. I2S硬件是否正常连接");
-        Serial.println("[音频] 3. 引脚是否与其他功能冲突");
-    }
-#else
-    device_state.audioReady = false;
-    Serial.println("[音频] 音频功能未启用 (ENABLE_AUDIO未定义)");
-#endif
-
 #ifdef BAT_PIN
     // bat.setDebug(true);
     bat.begin();
@@ -450,19 +425,6 @@ void update_device_state()
             ledManager.setLEDState(LED_BLINK_FAST, LED_COLOR_RED, 20);
         }
         // 其他情况让LEDManager自动处理充电状态显示
-
-#ifdef ENABLE_AUDIO
-        // 当电池电量降到20%以下时播放低电量警告音（避免频繁播放）
-        if (device_state.battery_percentage <= 20 &&
-            last_state.battery_percentage > 20)
-        {
-            if (device_state.audioReady)
-            {
-                Serial.println("[音频] 播放低电量警告音");
-                audioManager.playLowBatterySound();
-            }
-        }
-#endif
     }
 
     // 检查外部电源状态变化

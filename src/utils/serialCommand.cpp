@@ -70,29 +70,6 @@ void handleSerialCommand()
             Serial.println("IMU状态: " + String(device_state.imuReady ? "就绪" : "未就绪"));
             Serial.println("罗盘状态: " + String(device_state.compassReady ? "就绪" : "未就绪"));
             Serial.println("");
-            Serial.println("--- 音频设备状态 ---");
-#ifdef ENABLE_AUDIO
-            Serial.println("音频系统: " + String(device_state.audioReady ? "✅ 就绪" : "❌ 未就绪"));
-            if (device_state.audioReady)
-            {
-                Serial.printf("音频引脚: WS=%d, BCLK=%d, DATA=%d\n", IIS_S_WS_PIN, IIS_S_BCLK_PIN, IIS_S_DATA_PIN);
-                Serial.println("音频芯片: NS4168 功率放大器");
-                Serial.println("采样率: 16kHz");
-                Serial.println("位深度: 16位");
-                Serial.println("声道: 单声道");
-                Serial.println("支持事件: 开机音/WiFi连接音/GPS定位音/低电量音/睡眠音");
-            }
-            else
-            {
-                Serial.println("⚠️ 音频系统未就绪，请检查:");
-                Serial.println("  1. I2S引脚连接是否正确");
-                Serial.println("  2. NS4168芯片是否正常工作");
-                Serial.println("  3. 音频引脚是否与其他功能冲突");
-            }
-#else
-            Serial.println("音频系统: ❌ 未启用 (编译时禁用)");
-#endif
-            Serial.println("");
             Serial.println("--- 电源状态 ---");
             Serial.println("电池电压: " + String(device_state.battery_voltage) + " mV");
             Serial.println("电池电量: " + String(device_state.battery_percentage) + "%");
@@ -155,101 +132,6 @@ void handleSerialCommand()
             }
 #else
             Serial.println("MQTT功能已禁用");
-#endif
-        }
-        else if (command.startsWith("audio."))
-        {
-#ifdef ENABLE_AUDIO
-            if (command == "audio.test")
-            {
-                Serial.println("=== 音频系统测试 ===");
-                if (device_state.audioReady)
-                {
-                    Serial.println("播放测试音频序列...");
-                    audioManager.testAudio();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪，无法测试");
-                }
-            }
-            else if (command == "audio.boot")
-            {
-                Serial.println("播放开机成功音...");
-                if (device_state.audioReady)
-                {
-                    audioManager.playBootSuccessSound();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪");
-                }
-            }
-            else if (command == "audio.wifi")
-            {
-                Serial.println("播放WiFi连接音...");
-                if (device_state.audioReady)
-                {
-                    audioManager.playWiFiConnectedSound();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪");
-                }
-            }
-            else if (command == "audio.gps")
-            {
-                Serial.println("播放GPS定位音...");
-                if (device_state.audioReady)
-                {
-                    audioManager.playGPSFixedSound();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪");
-                }
-            }
-            else if (command == "audio.battery")
-            {
-                Serial.println("播放低电量音...");
-                if (device_state.audioReady)
-                {
-                    audioManager.playLowBatterySound();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪");
-                }
-            }
-            else if (command == "audio.sleep")
-            {
-                Serial.println("播放睡眠音...");
-                if (device_state.audioReady)
-                {
-                    audioManager.playSleepModeSound();
-                }
-                else
-                {
-                    Serial.println("❌ 音频系统未就绪");
-                }
-            }
-            else if (command == "audio.help")
-            {
-                Serial.println("=== 音频命令帮助 ===");
-                Serial.println("audio.test    - 播放测试音频序列");
-                Serial.println("audio.boot    - 播放开机成功音");
-                Serial.println("audio.wifi    - 播放WiFi连接音");
-                Serial.println("audio.gps     - 播放GPS定位音");
-                Serial.println("audio.battery - 播放低电量音");
-                Serial.println("audio.sleep   - 播放睡眠音");
-                Serial.println("audio.help    - 显示此帮助信息");
-            }
-            else
-            {
-                Serial.println("未知音频命令，输入 'audio.help' 查看帮助");
-            }
-#else
-            Serial.println("音频功能未启用");
 #endif
         }
         else if (command == "restart" || command == "reboot")
