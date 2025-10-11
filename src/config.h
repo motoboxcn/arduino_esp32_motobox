@@ -99,8 +99,6 @@
 #define ENABLE_FALLBACK_LOCATION    true    // 启用WiFi/LBS兜底定位
 
 // 高级融合定位功能（可选）
-#define ENABLE_IMU_FUSION           // 启用IMU惯导修正（替代原来的ENABLE_FUSION_LOCATION）
-
 // 融合定位配置
 #ifdef ENABLE_IMU_FUSION
 #define FUSION_EKF_VEHICLE_ENABLED    true
