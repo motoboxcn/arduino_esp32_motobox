@@ -32,11 +32,14 @@ bool MotoBoxIMUProvider::getData(IMUData& data) {
     data.valid = true;
     last_update_time = data.timestamp;
     
-    // if (debug_enabled) {
-    //     Serial.printf("[IMU] IMU数据: 加速度(%.2f,%.2f,%.2f) 陀螺仪(%.3f,%.3f,%.3f)\n", 
-    //                  data.accel[0], data.accel[1], data.accel[2],
-    //                  data.gyro[0], data.gyro[1], data.gyro[2]);
-    // }
+    if (debug_enabled) {
+        Serial.printf("[IMU原始] 加速度(%.3f,%.3f,%.3f)g 陀螺仪(%.3f,%.3f,%.3f)°/s\n", 
+                     imu.getAccelX(), imu.getAccelY(), imu.getAccelZ(),
+                     imu.getGyroX(), imu.getGyroY(), imu.getGyroZ());
+        Serial.printf("[IMU转换] 加速度(%.3f,%.3f,%.3f)m/s² 陀螺仪(%.3f,%.3f,%.3f)rad/s\n", 
+                     data.accel[0], data.accel[1], data.accel[2],
+                     data.gyro[0], data.gyro[1], data.gyro[2]);
+    }
     
     return true;
 #else
@@ -75,8 +78,12 @@ bool MotoBoxGPSProvider::getData(GPSData& data) {
     last_update_time = data.timestamp;
     
     if (debug_enabled) {
-        Serial.printf("[GPS] GPS数据: 位置(%.6f,%.6f) 高度%.1fm 精度%.1fm 卫星%d 来源:%s\n", 
+        Serial.printf("[GPS原始] 位置(%.6f,%.6f) 高度%.1fm 精度%.1fm 卫星%d 来源:%s\n", 
                      data.lat, data.lng, data.altitude, data.accuracy, gnss.satellites, gnss.location_type.c_str());
+        Serial.printf("[GPS状态] 固定:%s 有效:%s 启用:%s\n", 
+                     gnss.is_fixed ? "是" : "否", 
+                     gnss.data_valid ? "是" : "否",
+                     air780eg.getGNSS().isEnabled() ? "是" : "否");
     }
     
     return true;
@@ -607,6 +614,34 @@ String FusionLocationManager::getPositionJSON() {
 void FusionLocationManager::resetStats() {
     memset(&stats, 0, sizeof(stats));
     debugPrint("统计信息已重置");
+}
+
+void FusionLocationManager::calibrateIMU() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法校准IMU");
+        return;
+    }
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->calibrateIMU();
+        debugPrint("EKF IMU校准完成");
+    } else {
+        debugPrint("当前算法不支持IMU校准");
+    }
+}
+
+void FusionLocationManager::resetIMUCalibration() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法重置IMU校准");
+        return;
+    }
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->resetIMUCalibration();
+        debugPrint("EKF IMU校准已重置");
+    } else {
+        debugPrint("当前算法不支持IMU校准");
+    }
 }
 
 void FusionLocationManager::configureFallbackLocation(bool enable, 

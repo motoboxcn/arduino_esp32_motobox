@@ -317,20 +317,25 @@ void DataCollector::printComprehensiveData() {
     // 模式信息
     output += "模式:" + String(current_mode == MODE_NORMAL ? "正常" : "运动") + " ";
     
-    // GPS信息
+    // GPS信息 - 优化显示
     if (current_sensor_data.gps.valid) {
         output += "GPS:" + String(current_sensor_data.gps.latitude, 6) + "," + 
                  String(current_sensor_data.gps.longitude, 6) + 
-                 "(卫星:" + String(current_sensor_data.gps.satellites) + ") ";
+                 "(卫星:" + String(current_sensor_data.gps.satellites) + 
+                 ",速度:" + String(current_sensor_data.gps.speed, 1) + "km/h) ";
     } else {
         output += "GPS:无效 ";
     }
     
-    // IMU信息
+    // IMU信息 - 添加更多有用信息
     #ifdef ENABLE_IMU
     extern IMU imu;
     output += "IMU:加速度(" + String(imu.getAccelX(), 3) + "," + 
              String(imu.getAccelY(), 3) + "," + String(imu.getAccelZ(), 3) + ") ";
+    
+    // 添加姿态角信息
+    output += "姿态(" + String(imu.getRoll(), 1) + "," + 
+             String(imu.getPitch(), 1) + "," + String(imu.getYaw(), 1) + ") ";
     #endif
     
     // 罗盘信息
@@ -348,6 +353,24 @@ void DataCollector::printComprehensiveData() {
     } else {
         output += " 传输:禁用";
     }
+    
+    // 添加融合定位状态（如果启用）
+    #ifdef ENABLE_IMU_FUSION
+    extern FusionLocationManager fusionLocationManager;
+    if (fusionLocationManager.isInitialized()) {
+        Position fusedPos = fusionLocationManager.getFusedPosition();
+        if (fusedPos.valid) {
+            output += " 融合:" + String(fusedPos.lat, 6) + "," + 
+                     String(fusedPos.lng, 6) + 
+                     "(速度:" + String(fusedPos.speed, 1) + 
+                     ",位移:" + String(fusedPos.displacement.x, 1) + "," +
+                     String(fusedPos.displacement.y, 1) + "," +
+                     String(fusedPos.displacement.z, 1) + ")";
+        } else {
+            output += " 融合:无效";
+        }
+    }
+    #endif
     
     Serial.println(output);
 }

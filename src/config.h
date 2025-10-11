@@ -99,6 +99,7 @@
 
 // 高级融合定位功能（可选）
 // 融合定位配置
+// 注意：ENABLE_IMU_FUSION 在 platformio.ini 中通过编译参数定义
 #ifdef ENABLE_IMU_FUSION
 #define FUSION_EKF_VEHICLE_ENABLED    true
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）

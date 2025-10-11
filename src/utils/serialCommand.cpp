@@ -5,6 +5,10 @@
 #include "power/PowerModeManager.h"
 #endif
 
+#ifdef ENABLE_IMU_FUSION
+#include "location/FusionLocationManager.h"
+#endif
+
 // ===================== 串口命令处理函数 =====================
 /**
  * 处理串口输入命令
@@ -312,6 +316,83 @@ void handleSerialCommand()
                 Serial.println("输入 'data.help' 查看数据采集命令帮助");
             }
         }
+        else if (command.startsWith("fusion."))
+        {
+            #ifdef ENABLE_IMU_FUSION
+            extern FusionLocationManager fusionLocationManager;
+            
+            if (command == "fusion.status")
+            {
+                Serial.println("=== 融合定位状态 ===");
+                if (fusionLocationManager.isInitialized()) {
+                    Position pos = fusionLocationManager.getFusedPosition();
+                    if (pos.valid) {
+                        Serial.printf("融合位置: %.6f, %.6f\n", pos.lat, pos.lng);
+                        Serial.printf("融合速度: %.2f km/h\n", pos.speed * 3.6f);
+                        Serial.printf("融合航向: %.1f°\n", pos.heading);
+                        Serial.printf("位置精度: %.2f m\n", pos.accuracy);
+                    } else {
+                        Serial.println("融合位置: 无效");
+                    }
+                    fusionLocationManager.printStats();
+                } else {
+                    Serial.println("融合定位系统: 未初始化");
+                }
+            }
+            else if (command == "fusion.debug.on")
+            {
+                fusionLocationManager.setDebug(true);
+                fusionLocationManager.resetOrigin();
+                fusionLocationManager.resetStats();
+                Serial.println("✅ 融合定位调试输出已启用，系统已重置");
+            }
+            else if (command == "fusion.debug.off")
+            {
+                fusionLocationManager.setDebug(false);
+                Serial.println("❌ 融合定位调试输出已禁用");
+            }
+            else if (command == "fusion.reset")
+            {
+                fusionLocationManager.resetOrigin();
+                fusionLocationManager.resetStats();
+                Serial.println("✅ 融合定位系统已重置");
+            }
+            else if (command == "fusion.calibrate")
+            {
+                if (fusionLocationManager.isInitialized()) {
+                    fusionLocationManager.calibrateIMU();
+                    Serial.println("✅ IMU校准完成，当前设备位置已设为水平基准");
+                } else {
+                    Serial.println("❌ 融合定位系统未初始化");
+                }
+            }
+            else if (command == "fusion.help")
+            {
+                Serial.println("=== 融合定位命令帮助 ===");
+                Serial.println("状态查询:");
+                Serial.println("  fusion.status  - 显示融合定位状态");
+                Serial.println("");
+                Serial.println("调试控制:");
+                Serial.println("  fusion.debug.on - 启用调试输出");
+                Serial.println("  fusion.debug.off- 禁用调试输出");
+                Serial.println("");
+                Serial.println("系统控制:");
+                Serial.println("  fusion.reset    - 重置融合定位系统");
+                Serial.println("  fusion.calibrate- 校准IMU（以当前位置为水平基准）");
+                Serial.println("");
+                Serial.println("说明:");
+                Serial.println("  融合定位结合IMU、GPS、罗盘数据");
+                Serial.println("  提供更精确的位置和速度估计");
+            }
+            else
+            {
+                Serial.println("❌ 未知融合定位命令: " + command);
+                Serial.println("输入 'fusion.help' 查看融合定位命令帮助");
+            }
+            #else
+            Serial.println("❌ 融合定位功能未启用");
+            #endif
+        }
         else if (command == "help")
         {
             Serial.println("=== 可用命令 ===");
@@ -357,6 +438,13 @@ void handleSerialCommand()
             Serial.println("  data.debug.on- 启用调试输出");
             Serial.println("  data.help    - 显示数据采集命令帮助");
             Serial.println("");
+#ifdef ENABLE_IMU_FUSION
+            Serial.println("融合定位命令:");
+            Serial.println("  fusion.status- 显示融合定位状态");
+            Serial.println("  fusion.debug.on- 启用调试输出 fusion.debug.off");
+            Serial.println("  fusion.help  - 显示融合定位命令帮助");
+            Serial.println("");
+#endif
             Serial.println("提示: 命令不区分大小写");
         }
         else

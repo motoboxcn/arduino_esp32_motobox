@@ -299,6 +299,16 @@ public:
     void resetStats();
     
     /**
+     * @brief 校准IMU，以当前位置为水平基准
+     */
+    void calibrateIMU();
+    
+    /**
+     * @brief 重置IMU校准
+     */
+    void resetIMUCalibration();
+    
+    /**
      * @brief 获取当前使用的算法
      */
     FusionAlgorithm getCurrentAlgorithm() const { return currentAlgorithm; }
