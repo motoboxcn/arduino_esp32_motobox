@@ -103,8 +103,13 @@ String getDeviceStatusJSON()
 
 String getLocationJSON()
 {
+#ifdef ENABLE_FUSION_LOCATION
     // 走惯导估算获取位置信息
     return fusionLocationManager.getPositionJSON();
+#else
+    // 融合定位功能被禁用，返回空JSON
+    return "{}";
+#endif
 }
 
 void mqttMessageCallback(const String &topic, const String &payload)

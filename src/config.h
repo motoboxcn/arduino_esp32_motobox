@@ -52,6 +52,7 @@
 #define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
 #define AIR780EG_LOG_VERBOSE_ENABLED true
 
+
 // GNSS查询间隔配置（优化串口资源使用）
 #define GNSS_UPDATE_INTERVAL_VALID    3000   // GNSS有效时3秒查询一次
 #define GNSS_UPDATE_INTERVAL_INVALID  10000  // GNSS无效时10秒查询一次
@@ -72,9 +73,6 @@
 #define POWER_MODE_AUTO_SWITCH_ENABLED    true    // 默认启用自动模式切换
 #define POWER_MODE_EVALUATION_INTERVAL    5000    // 模式评估间隔（毫秒）
 #define POWER_MODE_MIN_SWITCH_INTERVAL    30000   // 最小模式切换间隔（毫秒）
-
-// 调试日志控制
-#define FUSION_LOCATION_DEBUG_ENABLED     false   // 融合定位调试日志开关
 
 // GPS配置
 #define GPS_UPDATE_INTERVAL          1000
@@ -99,35 +97,9 @@
 #define BUZZER_PIN                   25   // 蜂鸣器引脚
 #endif
 
-// GPS记录器配置
-#ifdef ENABLE_GPS_LOGGER
-#define GPS_LOG_INTERVAL_MS          5000    // GPS数据记录间隔（毫秒）
-#define GPS_MIN_SATELLITES           4       // 最小卫星数量（有效GPS数据）
-#define GPS_MAX_LOG_FILES            100     // 最大日志文件数量
-#define GPS_AUTO_EXPORT_GEOJSON      false   // 是否自动导出GeoJSON
-#define GPS_STORAGE_CHECK_INTERVAL   600000  // 存储空间检查间隔（10分钟）
-#define GPS_LOG_DIR                  "/logs/gps"
-#define GPS_CONFIG_FILE              "/config/gps.json"
-#define GPS_COORDINATE_PRECISION     8       // 坐标精度（小数位数）
-#define GPS_ALTITUDE_PRECISION       2       // 高度精度
-#define GPS_SPEED_PRECISION          2       // 速度精度
-#define GPS_MIN_FREE_SPACE_MB        50      // 最小可用空间（MB）
-#define GPS_AUTO_CLEANUP_DAYS        30      // 自动清理天数
-#define GPS_LOGGER_DEBUG_ENABLED      false
-#define DATA_COLLECTOR_DEBUG_ENABLED  false  // 数据采集器调试输出
-#define IMU_DEBUG_ENABLED             false  // IMU调试输出
-#define COMPASS_DEBUG_ENABLED          false  // 指南针调试输出
-#endif
-
-// 融合定位功能
-#define ENABLE_FUSION_LOCATION
-#define FUSION_EKF_VEHICLE_ENABLED    true
-
-
-// #define AT_DEBUG_ENABLED
-
 // 融合定位配置
 #ifdef ENABLE_FUSION_LOCATION
+#define FUSION_EKF_VEHICLE_ENABLED    true
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）
 #define FUSION_LOCATION_DEBUG_ENABLED    false     // 调试输出
 #define FUSION_LOCATION_INITIAL_LAT      39.9042 // 默认初始纬度（北京）

@@ -210,6 +210,7 @@ void setup()
   {
     Serial.println("[融合定位] ❌ 融合定位系统初始化失败");
   }
+  
   // 配置兜底定位 - 测试用的短间隔
   fusionLocationManager.configureFallbackLocation(
     true,      // 启用兜底定位
@@ -217,8 +218,7 @@ void setup()
     60000,     // LBS定位间隔 1分钟（测试用）
     120000,     // WiFi定位间隔 120秒
     true       // 优先使用WiFi定位
-);
-
+  );
 #endif
   //================ 融合定位初始化结束 ================
 
