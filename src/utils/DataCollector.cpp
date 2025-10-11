@@ -12,10 +12,23 @@ DataCollector::DataCollector() {
     debug_enabled = false;
     #endif
     
+    #ifdef DATA_COLLECTOR_VERBOSE_ENABLED
+    verbose_enabled = DATA_COLLECTOR_VERBOSE_ENABLED;
+    #else
+    verbose_enabled = false;
+    #endif
+    
     last_collection_time = 0;
     last_transmission_time = 0;
+    last_output_time = 0;
     collection_interval = 1000;      // 1秒采集一次
     transmission_interval = 5000;    // 5秒传输一次
+    
+    #ifdef DATA_COLLECTOR_OUTPUT_INTERVAL
+    output_interval = DATA_COLLECTOR_OUTPUT_INTERVAL;
+    #else
+    output_interval = 5000;          // 5秒输出一次
+    #endif
     
     // 初始化IMU统计数据
     resetIMUStats();
@@ -53,9 +66,10 @@ void DataCollector::loop() {
         
         last_collection_time = now;
         
-        // 减少调试输出频率，只在调试模式下且需要时才输出
-        if (debug_enabled && (now % 10000 < collection_interval)) {
-            debugPrint("数据采集完成");
+        // 定期输出综合数据信息
+        if (debug_enabled && (now - last_output_time >= output_interval)) {
+            printComprehensiveData();
+            last_output_time = now;
         }
     }
     
@@ -79,8 +93,9 @@ void DataCollector::loop() {
         
         // 根据传输结果输出相应信息
         if (success) {
-            if (debug_enabled && (now % 30000 < transmission_interval)) {
-                debugPrint("数据传输完成");
+            if (debug_enabled) {
+                String json = getDataJSON();
+                debugPrint("数据传输成功: " + String(json.length()) + " 字节");
             }
         } else {
             if (debug_enabled) {
@@ -132,11 +147,15 @@ void DataCollector::collectGPSData() {
         current_sensor_data.gps.valid = true;
         current_sensor_data.gps.timestamp = millis();
         
-        debugPrint("GPS数据更新: " + String(current_sensor_data.gps.latitude, 6) + 
-                  "," + String(current_sensor_data.gps.longitude, 6));
+        if (verbose_enabled) {
+            debugPrint("GPS数据更新: " + String(current_sensor_data.gps.latitude, 6) + 
+                      "," + String(current_sensor_data.gps.longitude, 6));
+        }
     } else {
         current_sensor_data.gps.valid = false;
-        debugPrint("GPS数据无效");
+        if (verbose_enabled) {
+            debugPrint("GPS数据无效");
+        }
     }
     #endif
 }
@@ -148,8 +167,10 @@ void DataCollector::collectIMUData() {
     // 获取当前IMU数据并更新统计
     updateIMUStatistics();
     
-    debugPrint("IMU数据更新: 加速度(" + String(imu.getAccelX(), 3) + "," + 
-              String(imu.getAccelY(), 3) + "," + String(imu.getAccelZ(), 3) + ")");
+    if (verbose_enabled) {
+        debugPrint("IMU数据更新: 加速度(" + String(imu.getAccelX(), 3) + "," + 
+                  String(imu.getAccelY(), 3) + "," + String(imu.getAccelZ(), 3) + ")");
+    }
     #endif
 }
 
@@ -230,10 +251,14 @@ void DataCollector::collectCompassData() {
         current_sensor_data.compass.valid = true;
         current_sensor_data.compass.timestamp = millis();
         
-        debugPrint("罗盘数据更新: 航向 " + String(current_sensor_data.compass.heading, 1) + "°");
+        if (verbose_enabled) {
+            debugPrint("罗盘数据更新: 航向 " + String(current_sensor_data.compass.heading, 1) + "°");
+        }
     } else {
         current_sensor_data.compass.valid = false;
-        debugPrint("罗盘数据无效");
+        if (verbose_enabled) {
+            debugPrint("罗盘数据无效");
+        }
     }
     #endif
 }
@@ -256,7 +281,9 @@ void DataCollector::collectSystemData() {
     }
     #endif
     
-    debugPrint("系统数据更新: 电池 " + String(current_sensor_data.system.battery_voltage, 2) + "V");
+    if (verbose_enabled) {
+        debugPrint("系统数据更新: 电池 " + String(current_sensor_data.system.battery_voltage, 2) + "V");
+    }
 }
 
 void DataCollector::resetIMUStats() {
@@ -280,6 +307,49 @@ void DataCollector::debugPrint(const String& message) {
     if (debug_enabled) {
         Serial.println("[数据采集] " + message);
     }
+}
+
+void DataCollector::printComprehensiveData() {
+    if (!debug_enabled) return;
+    
+    String output = "[数据采集] ";
+    
+    // 模式信息
+    output += "模式:" + String(current_mode == MODE_NORMAL ? "正常" : "运动") + " ";
+    
+    // GPS信息
+    if (current_sensor_data.gps.valid) {
+        output += "GPS:" + String(current_sensor_data.gps.latitude, 6) + "," + 
+                 String(current_sensor_data.gps.longitude, 6) + 
+                 "(卫星:" + String(current_sensor_data.gps.satellites) + ") ";
+    } else {
+        output += "GPS:无效 ";
+    }
+    
+    // IMU信息
+    #ifdef ENABLE_IMU
+    extern IMU imu;
+    output += "IMU:加速度(" + String(imu.getAccelX(), 3) + "," + 
+             String(imu.getAccelY(), 3) + "," + String(imu.getAccelZ(), 3) + ") ";
+    #endif
+    
+    // 罗盘信息
+    if (current_sensor_data.compass.valid) {
+        output += "罗盘:" + String(current_sensor_data.compass.heading, 1) + "° ";
+    }
+    
+    // 系统信息
+    output += "电池:" + String(current_sensor_data.system.battery_voltage, 2) + "V ";
+    output += "运行:" + String(millis() / 1000) + "s";
+    
+    // 传输状态
+    if (transmission_enabled) {
+        output += " 传输:启用";
+    } else {
+        output += " 传输:禁用";
+    }
+    
+    Serial.println(output);
 }
 
 String DataCollector::getDataJSON() {

@@ -1,4 +1,5 @@
 #include "utils/serialCommand.h"
+#include "utils/DataCollector.h"
 
 #ifdef ENABLE_POWER_MODE_MANAGEMENT
 #include "power/PowerModeManager.h"
@@ -222,6 +223,95 @@ void handleSerialCommand()
             Serial.println("❌ 功耗模式管理未启用");
             #endif
         }
+        else if (command.startsWith("data."))
+        {
+            if (command == "data.status")
+            {
+                Serial.println("=== 数据采集状态 ===");
+                dataCollector.printStats();
+            }
+            else if (command == "data.debug.on")
+            {
+                dataCollector.setDebug(true);
+                Serial.println("✅ 数据采集调试输出已启用");
+            }
+            else if (command == "data.debug.off")
+            {
+                dataCollector.setDebug(false);
+                Serial.println("❌ 数据采集调试输出已禁用");
+            }
+            else if (command == "data.verbose.on")
+            {
+                dataCollector.setVerbose(true);
+                Serial.println("✅ 数据采集详细输出已启用");
+            }
+            else if (command == "data.verbose.off")
+            {
+                dataCollector.setVerbose(false);
+                Serial.println("❌ 数据采集详细输出已禁用");
+            }
+            else if (command == "data.start")
+            {
+                dataCollector.startCollection();
+                Serial.println("✅ 数据采集已启动");
+            }
+            else if (command == "data.stop")
+            {
+                dataCollector.stopCollection();
+                Serial.println("❌ 数据采集已停止");
+            }
+            else if (command == "data.mode.normal")
+            {
+                dataCollector.setMode(MODE_NORMAL);
+                Serial.println("✅ 数据采集模式已切换为正常模式");
+            }
+            else if (command == "data.mode.sport")
+            {
+                dataCollector.setMode(MODE_SPORT);
+                Serial.println("✅ 数据采集模式已切换为运动模式");
+            }
+            else if (command == "data.transmit.on")
+            {
+                dataCollector.enableTransmission(true);
+                Serial.println("✅ 数据传输已启用");
+            }
+            else if (command == "data.transmit.off")
+            {
+                dataCollector.enableTransmission(false);
+                Serial.println("❌ 数据传输已禁用");
+            }
+            else if (command == "data.help")
+            {
+                Serial.println("=== 数据采集命令帮助 ===");
+                Serial.println("状态查询:");
+                Serial.println("  data.status  - 显示数据采集状态");
+                Serial.println("");
+                Serial.println("调试控制:");
+                Serial.println("  data.debug.on   - 启用调试输出");
+                Serial.println("  data.debug.off  - 禁用调试输出");
+                Serial.println("  data.verbose.on - 启用详细输出");
+                Serial.println("  data.verbose.off- 禁用详细输出");
+                Serial.println("");
+                Serial.println("采集控制:");
+                Serial.println("  data.start      - 开始数据采集");
+                Serial.println("  data.stop       - 停止数据采集");
+                Serial.println("  data.mode.normal- 切换到正常模式(5秒)");
+                Serial.println("  data.mode.sport - 切换到运动模式(1秒)");
+                Serial.println("");
+                Serial.println("传输控制:");
+                Serial.println("  data.transmit.on - 启用数据传输");
+                Serial.println("  data.transmit.off- 禁用数据传输");
+                Serial.println("");
+                Serial.println("模式说明:");
+                Serial.println("  正常模式: 5秒传输间隔，适合日常使用");
+                Serial.println("  运动模式: 1秒传输间隔，适合运动追踪");
+            }
+            else
+            {
+                Serial.println("❌ 未知数据采集命令: " + command);
+                Serial.println("输入 'data.help' 查看数据采集命令帮助");
+            }
+        }
         else if (command == "help")
         {
             Serial.println("=== 可用命令 ===");
@@ -262,6 +352,11 @@ void handleSerialCommand()
             Serial.println("  power.help   - 显示功耗命令帮助");
             Serial.println("");
 #endif
+            Serial.println("数据采集命令:");
+            Serial.println("  data.status  - 显示数据采集状态");
+            Serial.println("  data.debug.on- 启用调试输出");
+            Serial.println("  data.help    - 显示数据采集命令帮助");
+            Serial.println("");
             Serial.println("提示: 命令不区分大小写");
         }
         else

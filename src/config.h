@@ -11,7 +11,6 @@
 
 // GPS功能通过Air780EG内置GNSS提供
 #define ENABLE_GPS
-#define USE_AIR780EG_GNSS
 
 // SD卡功能
 #ifndef ENABLE_SDCARD
@@ -47,7 +46,7 @@
 
 // Air780EG配置
 #define AIR780EG_BAUD_RATE           115200
-#define AIR780EG_LOG_VERBOSE_ENABLED true
+#define AIR780EG_LOG_VERBOSE_ENABLED false
 
 
 // GNSS查询间隔配置（优化串口资源使用）
@@ -130,5 +129,10 @@
 #define BATTERY_VOLTAGE_THRESHOLD         100     // 电压变化阈值（毫伏）
 #define BATTERY_CALIBRATION_ENABLED       true    // 启用电压校准
 #define BATTERY_DEBUG_ENABLED             false   // 电池调试输出
+
+// 数据采集调试配置
+#define DATA_COLLECTOR_DEBUG_ENABLED      true    // 数据采集调试输出
+#define DATA_COLLECTOR_VERBOSE_ENABLED    false   // 数据采集详细输出
+#define DATA_COLLECTOR_OUTPUT_INTERVAL    5000    // 数据采集输出间隔（毫秒）
 
 #endif // CONFIG_H

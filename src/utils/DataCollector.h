@@ -119,19 +119,24 @@ public:
     
     // 调试
     void setDebug(bool debug) { debug_enabled = debug; }
+    void setVerbose(bool verbose) { verbose_enabled = verbose; }
     void printStats();
+    void printComprehensiveData();
 
 private:
     DataCollectionMode current_mode;
     bool collecting;
     bool transmission_enabled;
     bool debug_enabled;
+    bool verbose_enabled;
     
     // 定时器
     unsigned long last_collection_time;
     unsigned long last_transmission_time;
+    unsigned long last_output_time;
     unsigned long collection_interval;  // 采集间隔(ms)
     unsigned long transmission_interval; // 传输间隔(ms)
+    unsigned long output_interval;      // 输出间隔(ms)
     
     // 数据缓存
     sensor_data_t current_sensor_data;
