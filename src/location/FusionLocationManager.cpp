@@ -620,11 +620,17 @@ void FusionLocationManager::configureFallbackLocation(bool enable,
     fallbackConfig.wifi_interval = wifi_interval;
     fallbackConfig.prefer_wifi_over_lbs = prefer_wifi;
     
+    // 设置初始时间为较早的时间，确保启动后能立即尝试定位
+    unsigned long currentTime = millis();
+    fallbackConfig.last_lbs_time = currentTime - lbs_interval;  // 设置为"已经过了间隔时间"
+    fallbackConfig.last_wifi_time = currentTime - wifi_interval; // 设置为"已经过了间隔时间"
+    
     debugPrint("兜底定位配置: " + String(enable ? "启用" : "禁用") + 
                ", GNSS超时:" + String(gnss_timeout/1000) + "s" +
                ", LBS间隔:" + String(lbs_interval/1000) + "s" +
                ", WiFi间隔:" + String(wifi_interval/1000) + "s" +
-               ", 优先WiFi:" + String(prefer_wifi ? "是" : "否"));
+               ", 优先WiFi:" + String(prefer_wifi ? "是" : "否") +
+               ", 启动时立即尝试定位");
 }
 
 void FusionLocationManager::handleFallbackLocation() {
