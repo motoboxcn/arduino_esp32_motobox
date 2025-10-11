@@ -103,12 +103,13 @@ String getDeviceStatusJSON()
 
 String getLocationJSON()
 {
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
     // 走惯导估算获取位置信息
+    extern FusionLocationManager fusionLocationManager;
     return fusionLocationManager.getPositionJSON();
 #else
-    // 融合定位功能被禁用，返回空JSON
-    return "{}";
+    // 融合定位功能被禁用，使用Air780EG基础定位
+    return air780eg.getGNSS().getLocationJSON();
 #endif
 }
 
@@ -549,7 +550,14 @@ void Device::initializeGSM()
 #else
     Air780EG::setLogLevel(AIR780EG_LOG_INFO);
 #endif
-    while (!air780eg.begin(&Serial1, 115200, GSM_RX_PIN, GSM_TX_PIN, GSM_EN))
+    // 配置Air780EG功能
+    Air780EGConfig config;
+    config.enableGSM = true;
+    config.enableMQTT = true;
+    config.enableGNSS = ENABLE_GNSS_LOCATION;
+    config.enableFallbackLocation = ENABLE_FALLBACK_LOCATION;
+    
+    while (!air780eg.begin(&Serial1, 115200, GSM_RX_PIN, GSM_TX_PIN, GSM_EN, config))
     {
         Serial.println("[GSM] ❌ Air780EG基础初始化失败");
         device_state.gsmReady = false;
@@ -557,7 +565,6 @@ void Device::initializeGSM()
     }
     Serial.println("[GSM] ✅ Air780EG基础初始化成功");
     device_state.gsmReady = true;
-    air780eg.getGNSS().enableGNSS();
 
 #ifdef DISABLE_MQTT
     Serial.println("MQTT功能已禁用");

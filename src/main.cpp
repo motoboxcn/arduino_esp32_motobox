@@ -40,8 +40,9 @@
 #include "compass/Compass.h"
 #endif
 
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
 #include "location/FusionLocationManager.h"
+FusionLocationManager fusionLocationManager;
 #endif
 
 // GSM模块包含
@@ -85,7 +86,7 @@ void taskSystem(void *parameter)
     imu.loop();
 #endif
 
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
     fusionLocationManager.loop();
 #endif
 
@@ -175,7 +176,7 @@ void setup()
   device.begin();
 
   //================ 融合定位初始化开始 ================
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
   Serial.println("[融合定位] 初始化融合定位系统...");
   // 使用EKF车辆模型算法，适合摩托车应用 FUSION_EKF_VEHICLE FUSION_SIMPLE_KALMAN
   #if FUSION_EKF_VEHICLE_ENABLED == true
@@ -264,7 +265,7 @@ void loop()
 #endif
 
     // 打印融合定位状态
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
     if (fusionLocationManager.isInitialized())
     {
       Position pos = fusionLocationManager.getFusedPosition();

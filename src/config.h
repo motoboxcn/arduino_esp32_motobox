@@ -47,9 +47,6 @@
 
 // Air780EG配置
 #define AIR780EG_BAUD_RATE           115200
-#define AIR780EG_TIMEOUT             5000
-#define AIR780EG_GNSS_UPDATE_RATE    1000  // 1Hz
-#define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
 #define AIR780EG_LOG_VERBOSE_ENABLED true
 
 
@@ -97,8 +94,15 @@
 #define BUZZER_PIN                   25   // 蜂鸣器引脚
 #endif
 
+// 基础定位功能（默认启用）
+#define ENABLE_GNSS_LOCATION        true    // 启用GNSS定位
+#define ENABLE_FALLBACK_LOCATION    true    // 启用WiFi/LBS兜底定位
+
+// 高级融合定位功能（可选）
+#define ENABLE_IMU_FUSION           // 启用IMU惯导修正（替代原来的ENABLE_FUSION_LOCATION）
+
 // 融合定位配置
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
 #define FUSION_EKF_VEHICLE_ENABLED    true
 #define FUSION_LOCATION_UPDATE_INTERVAL  100     // 融合定位更新间隔（毫秒）
 #define FUSION_LOCATION_DEBUG_ENABLED    false     // 调试输出
@@ -119,7 +123,7 @@
 #define MOTO_MAX_ACCELERATION            5.0f    // 最大加速度（m/s²）
 #define MOTO_MAX_DECELERATION            12.0f   // 最大减速度（m/s²）
 #define MOTO_MAX_STEERING_ANGLE          1.0f    // 最大转向角（弧度）
-#endif // ENABLE_FUSION_LOCATION
+#endif // ENABLE_IMU_FUSION
 
 // 电池管理优化配置
 #define BATTERY_VOLTAGE_FILTER_ENABLED    true    // 启用电压滤波
