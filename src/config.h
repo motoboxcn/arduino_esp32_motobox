@@ -50,7 +50,7 @@
 #define AIR780EG_TIMEOUT             5000
 #define AIR780EG_GNSS_UPDATE_RATE    1000  // 1Hz
 #define AIR780EG_NETWORK_CHECK_INTERVAL 5000  // 5秒
-#define AIR780EG_LOG_VERBOSE_ENABLED false
+#define AIR780EG_LOG_VERBOSE_ENABLED true
 
 // GNSS查询间隔配置（优化串口资源使用）
 #define GNSS_UPDATE_INTERVAL_VALID    3000   // GNSS有效时3秒查询一次
@@ -72,6 +72,9 @@
 #define POWER_MODE_AUTO_SWITCH_ENABLED    true    // 默认启用自动模式切换
 #define POWER_MODE_EVALUATION_INTERVAL    5000    // 模式评估间隔（毫秒）
 #define POWER_MODE_MIN_SWITCH_INTERVAL    30000   // 最小模式切换间隔（毫秒）
+
+// 调试日志控制
+#define FUSION_LOCATION_DEBUG_ENABLED     false   // 融合定位调试日志开关
 
 // GPS配置
 #define GPS_UPDATE_INTERVAL          1000
