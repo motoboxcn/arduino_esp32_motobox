@@ -366,6 +366,33 @@ void handleSerialCommand()
                     Serial.println("❌ 融合定位系统未初始化");
                 }
             }
+            else if (command == "fusion.gravity.on")
+            {
+                if (fusionLocationManager.isInitialized()) {
+                    fusionLocationManager.enableGravityCompensation();
+                    Serial.println("✅ 重力补偿已启用，将分离重力和运动加速度");
+                } else {
+                    Serial.println("❌ 融合定位系统未初始化");
+                }
+            }
+            else if (command == "fusion.gravity.off")
+            {
+                if (fusionLocationManager.isInitialized()) {
+                    fusionLocationManager.disableGravityCompensation();
+                    Serial.println("❌ 重力补偿已禁用");
+                } else {
+                    Serial.println("❌ 融合定位系统未初始化");
+                }
+            }
+            else if (command == "fusion.reset.displacement")
+            {
+                if (fusionLocationManager.isInitialized()) {
+                    fusionLocationManager.resetDisplacement();
+                    Serial.println("✅ 相对位移已重置");
+                } else {
+                    Serial.println("❌ 融合定位系统未初始化");
+                }
+            }
             else if (command == "fusion.help")
             {
                 Serial.println("=== 融合定位命令帮助 ===");
@@ -379,6 +406,9 @@ void handleSerialCommand()
                 Serial.println("系统控制:");
                 Serial.println("  fusion.reset    - 重置融合定位系统");
                 Serial.println("  fusion.calibrate- 校准IMU（以当前位置为水平基准）");
+                Serial.println("  fusion.gravity.on - 启用重力补偿（分离重力和运动加速度）");
+                Serial.println("  fusion.gravity.off- 禁用重力补偿");
+                Serial.println("  fusion.reset.displacement - 重置相对位移（当前位置为新的起始点）");
                 Serial.println("");
                 Serial.println("说明:");
                 Serial.println("  融合定位结合IMU、GPS、罗盘数据");

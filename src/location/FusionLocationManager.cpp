@@ -644,6 +644,34 @@ void FusionLocationManager::resetIMUCalibration() {
     }
 }
 
+void FusionLocationManager::enableGravityCompensation() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法启用重力补偿");
+        return;
+    }
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->enableGravityCompensation();
+        debugPrint("EKF 重力补偿已启用");
+    } else {
+        debugPrint("当前算法不支持重力补偿");
+    }
+}
+
+void FusionLocationManager::disableGravityCompensation() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法禁用重力补偿");
+        return;
+    }
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        ekfTracker->disableGravityCompensation();
+        debugPrint("EKF 重力补偿已禁用");
+    } else {
+        debugPrint("当前算法不支持重力补偿");
+    }
+}
+
 void FusionLocationManager::configureFallbackLocation(bool enable, 
                                                      unsigned long gnss_timeout,
                                                      unsigned long lbs_interval,
@@ -903,6 +931,26 @@ FusionLocationManager::DataSourceStatus FusionLocationManager::getDataSourceStat
     }
     
     return status;
+}
+
+void FusionLocationManager::resetDisplacement() {
+    if (!initialized) {
+        debugPrint("系统未初始化，无法重置位移");
+        return;
+    }
+    
+    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
+        // 获取当前位置作为新的起始点
+        Position currentPos = getFusedPosition();
+        if (currentPos.valid) {
+            ekfTracker->setOrigin(currentPos.lat, currentPos.lng, currentPos.altitude);
+            debugPrint("相对位移已重置，当前位置设为新的起始点");
+        } else {
+            debugPrint("当前位置无效，无法重置位移");
+        }
+    } else {
+        debugPrint("当前算法不支持位移重置");
+    }
 }
 
 #ifdef ENABLE_FUSION_LOCATION

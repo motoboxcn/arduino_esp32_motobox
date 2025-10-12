@@ -45,6 +45,11 @@
 FusionLocationManager fusionLocationManager;
 #endif
 
+#ifdef ENABLE_BLE
+#include "ble/BLEManager.h"
+#include "ble/BLEDataProvider.h"
+#endif
+
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM
 // 直接使用新的Air780EG库
@@ -279,6 +284,21 @@ void loop()
 
   // 数据采集器处理
   dataCollector.loop();
+
+#ifdef ENABLE_BLE
+  // BLE数据更新
+  bleDataProvider.update();
+  
+  // 如果有客户端连接，更新BLE特征值
+  if (bleManager.isClientConnected()) {
+    bleManager.updateGPSData(bleDataProvider.getGPSData());
+    bleManager.updateBatteryData(bleDataProvider.getBatteryData());
+    bleManager.updateIMUData(bleDataProvider.getIMUData());
+  }
+  
+  // BLE管理器更新
+  bleManager.update();
+#endif
 
   // 最小延迟，实现高频更新（约1000Hz）
   delay(1);

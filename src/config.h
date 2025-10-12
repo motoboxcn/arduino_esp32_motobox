@@ -12,22 +12,13 @@
 // GPS功能通过Air780EG内置GNSS提供
 #define ENABLE_GPS
 
-// SD卡功能
-#ifndef ENABLE_SDCARD
-#define ENABLE_SDCARD
-#endif
-
-// GPS记录功能 (依赖于SD卡功能)
-#ifdef ENABLE_SDCARD
-#define ENABLE_GPS_LOGGER
-#endif
 
 #define ENABLE_LED
 #define LED_DEBUG_ENABLED false // LED调试已禁用（优化性能）
 
-// 轻量化版本 - 移除TFT和BLE功能
+// 轻量化版本 - 移除TFT功能，启用BLE功能
 // #define ENABLE_TFT  // 轻量化版本不需要显示屏
-// #define ENABLE_BLE  // 轻量化版本不需要蓝牙
+#define ENABLE_BLE  // 启用蓝牙功能
 
 
 
@@ -135,5 +126,16 @@
 #define DATA_COLLECTOR_DEBUG_ENABLED      true    // 数据采集调试输出
 #define DATA_COLLECTOR_VERBOSE_ENABLED    false   // 数据采集详细输出
 #define DATA_COLLECTOR_OUTPUT_INTERVAL    5000    // 数据采集输出间隔（毫秒）
+
+// BLE配置
+#ifdef ENABLE_BLE
+#define BLE_DEVICE_NAME_PREFIX            "MotoBox-"          // BLE设备名称前缀
+#define BLE_SERVICE_UUID                  "12345678-1234-1234-1234-123456789ABC"  // 主服务UUID
+#define BLE_CHAR_GPS_UUID                 "12345678-1234-1234-1234-123456789ABD"  // GPS位置特征UUID
+#define BLE_CHAR_BATTERY_UUID             "12345678-1234-1234-1234-123456789ABE"  // 电池电量特征UUID
+#define BLE_CHAR_IMU_UUID                 "12345678-1234-1234-1234-123456789ABF"  // IMU倾角特征UUID
+#define BLE_UPDATE_INTERVAL               1000                // BLE数据更新间隔（毫秒）
+#define BLE_DEBUG_ENABLED                 false               // BLE调试输出
+#endif
 
 #endif // CONFIG_H

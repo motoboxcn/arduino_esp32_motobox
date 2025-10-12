@@ -308,12 +308,19 @@ void Device::begin()
     Serial.println("[电源管理] GPS_WAKE_PIN 保持已解除");
 #endif
 
-#ifdef BLE_SERVER
-    bs.begin();
-#endif
-
-#ifdef BLE_CLIENT
-    bc.begin();
+#ifdef ENABLE_BLE
+    // 初始化BLE管理器（使用设备ID）
+    Serial.println("[BLE] 开始初始化BLE系统...");
+    if (bleManager.begin(device_state.device_id)) {
+        device_state.bleConnected = false; // 初始状态为未连接
+        Serial.println("[BLE] ✅ BLE系统初始化成功");
+    } else {
+        Serial.println("[BLE] ❌ BLE系统初始化失败");
+    }
+    
+    // 初始化BLE数据提供者
+    bleDataProvider.begin();
+    Serial.println("[BLE] ✅ BLE数据提供者初始化完成");
 #endif
 
     // 统一初始化I2C设备（IMU和Compass共用同一个I2C总线）
@@ -403,6 +410,13 @@ void Device::begin()
     initializeGSM();
 #endif
     Serial.println("GPS初始化已延迟到任务中!");
+
+#ifdef ENABLE_BLE
+    // 设置BLE数据源（在所有模块初始化完成后）
+    Serial.println("[BLE] 设置数据源...");
+    bleDataProvider.setDataSources(&air780eg, &imu, &bat);
+    Serial.println("[BLE] ✅ 数据源设置完成");
+#endif
 }
 
 // 通知特定状态变化

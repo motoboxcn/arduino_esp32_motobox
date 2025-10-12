@@ -2,8 +2,7 @@
 #define FUSION_LOCATION_MANAGER_H
 
 #include <Arduino.h>
-#include <FusionLocation.h>
-#include <EKFVehicleTracker.h>  // 新增EKF支持
+#include <MadgwickAHRS.h>
 #include "config.h"
 
 #ifdef ENABLE_IMU
@@ -17,85 +16,58 @@
 // Air780EG GPS数据
 #include "Air780EG.h"
 
-// 融合算法类型
+// 融合算法类型 - 现在只使用MadgwickAHRS
 enum FusionAlgorithm {
-    FUSION_SIMPLE_KALMAN,    // 简单卡尔曼滤波
-    FUSION_EKF_VEHICLE       // 扩展卡尔曼滤波（车辆模型）
+    FUSION_MADGWICK_AHRS     // MadgwickAHRS算法
 };
 
-/**
- * @brief 项目专用的IMU数据提供者
- * 适配QMI8658传感器数据到FusionLocation库
- */
-class MotoBoxIMUProvider : public IIMUProvider {
-private:
-    bool debug_enabled;
-    unsigned long last_update_time;
+// 摩托车轨迹点数据结构
+struct MotorcycleTrajectoryPoint {
+    double lat, lng;        // 经纬度
+    float altitude;         // 高度
+    float speed;            // 速度 (m/s)
+    float heading;          // 航向角 (度)
+    float pitch;            // 俯仰角 (度)
+    float roll;             // 横滚角 (度)
+    float leanAngle;        // 倾斜角 (度)
+    uint32_t timestamp;     // 时间戳
+    bool valid;             // 数据有效性
     
-public:
-    MotoBoxIMUProvider();
-    
-    bool getData(IMUData& data) override;
-    bool isAvailable() override;
-    
-    void setDebug(bool enable) { debug_enabled = enable; }
+    MotorcycleTrajectoryPoint() : lat(0), lng(0), altitude(0), speed(0), 
+                                 heading(0), pitch(0), roll(0), leanAngle(0), 
+                                 timestamp(0), valid(false) {}
 };
 
-/**
- * @brief 项目专用的GPS数据提供者
- * 适配Air780EG GNSS数据到FusionLocation库
- */
-class MotoBoxGPSProvider : public IGPSProvider {
-private:
-    bool debug_enabled;
-    unsigned long last_update_time;
+// 摩托车运动状态
+struct MotorcycleMotionState {
+    bool isAccelerating;    // 是否加速
+    bool isBraking;         // 是否制动
+    bool isLeaning;         // 是否倾斜
+    bool isWheelie;         // 是否翘头
+    bool isStoppie;         // 是否翘尾
+    bool isDrifting;        // 是否漂移
+    float leanAngle;        // 倾斜角
+    float leanRate;         // 倾斜角速度
+    float forwardAccel;     // 前进加速度
+    float lateralAccel;     // 侧向加速度
+    uint32_t timestamp;     // 时间戳
     
-public:
-    MotoBoxGPSProvider();
-    
-    bool getData(GPSData& data) override;
-    bool isAvailable() override;
-    
-    void setDebug(bool enable) { debug_enabled = enable; }
-};
-
-/**
- * @brief 项目专用的地磁计数据提供者
- * 适配QMC5883L罗盘数据到FusionLocation库
- */
-class MotoBoxMagProvider : public IMagProvider {
-private:
-    bool debug_enabled;
-    unsigned long last_update_time;
-    
-public:
-    MotoBoxMagProvider();
-    
-    bool getData(MagData& data) override;
-    bool isAvailable() override;
-    
-    void setDebug(bool enable) { debug_enabled = enable; }
+    MotorcycleMotionState() : isAccelerating(false), isBraking(false), 
+                             isLeaning(false), isWheelie(false), isStoppie(false), 
+                             isDrifting(false), leanAngle(0), leanRate(0), 
+                             forwardAccel(0), lateralAccel(0), timestamp(0) {}
 };
 
 /**
  * @brief 融合定位管理器
- * 整合IMU、GPS、地磁计数据，支持多种融合算法
+ * 基于MadgwickAHRS的摩托车惯导系统
  */
 class FusionLocationManager {
 private:
     static const char* TAG;
     
-    // 传感器提供者
-    MotoBoxIMUProvider* imuProvider;
-    MotoBoxGPSProvider* gpsProvider;
-    MotoBoxMagProvider* magProvider;
-    
-    // 融合算法对象
-    FusionLocation* simpleFusion;      // 简单卡尔曼滤波
-    EKFVehicleTracker* ekfTracker;     // EKF车辆追踪器
-    
-    // 当前使用的算法
-    FusionAlgorithm currentAlgorithm;
+    // Madgwick AHRS算法
+    MadgwickAHRS ahrs;
     
     // 配置参数
     bool initialized;
@@ -103,14 +75,41 @@ private:
     unsigned long update_interval;
     unsigned long last_update_time;
     unsigned long last_debug_print_time;
+    unsigned long last_motion_update_time;
     
     // 初始位置（可配置）
     double initial_latitude;
     double initial_longitude;
+    double originLat, originLng;
+    bool hasOrigin;
     
-    // EKF配置
-    EKFConfig ekfConfig;
-    VehicleModel vehicleModel;
+    // 当前位置和状态
+    MotorcycleTrajectoryPoint currentPosition;
+    MotorcycleMotionState currentMotionState;
+    
+    // 积分状态
+    float velocity[3];  // 速度积分 [x, y, z]
+    float position[3];  // 位置积分 [x, y, z]
+    float lastVelocity[3];  // 上次速度，用于加速度计算
+    
+    // 零速检测
+    bool isStationary;
+    uint32_t stationaryStartTime;
+    static const uint32_t STATIONARY_THRESHOLD = 1000; // 1秒
+    
+    // 轨迹记录
+    bool isRecording;
+    float totalDistance;
+    float maxSpeed;
+    float maxLeanAngle;
+    
+    // 运动检测阈值
+    float accelerationThreshold;
+    float brakingThreshold;
+    float leanThreshold;
+    float wheelieThreshold;
+    float stoppieThreshold;
+    float driftThreshold;
     
     // LBS/WiFi兜底定位配置
     struct FallbackLocationConfig {
@@ -137,7 +136,29 @@ private:
     } stats;
     
     void debugPrint(const String& message);
-    void updateStats(const Position& pos);
+    
+    // MadgwickAHRS相关方法
+    void updateAHRS();
+    void updatePosition();
+    void updateMotionState();
+    void applyZUPT();  // 零速更新
+    void calculateRelativePosition();
+    bool detectStationary();
+    
+    // 运动检测
+    bool detectAcceleration();
+    bool detectBraking();
+    bool detectLeaning();
+    bool detectWheelie();
+    bool detectStoppie();
+    bool detectDrifting();
+    
+    // 坐标转换
+    void latLngToXY(double lat, double lng, float& x, float& y);
+    void xyToLatLng(float x, float y, double& lat, double& lng);
+    
+    // 轨迹统计
+    void updateTrajectoryStatistics();
     
     // 兜底定位相关方法
     void handleFallbackLocation();
@@ -151,13 +172,11 @@ public:
     
     /**
      * @brief 初始化融合定位系统
-     * @param algorithm 融合算法类型
      * @param initLat 初始纬度（默认使用北京坐标）
      * @param initLng 初始经度
      * @return 是否初始化成功
      */
-    bool begin(FusionAlgorithm algorithm = FUSION_EKF_VEHICLE, 
-               double initLat = 39.9042, double initLng = 116.4074);
+    bool begin(double initLat = 39.9042, double initLng = 116.4074);
     
     /**
      * @brief 主循环更新
@@ -166,27 +185,31 @@ public:
     void loop();
     
     /**
-     * @brief 获取融合后的位置信息
-     * @return Position结构体，包含融合后的位置、精度、航向等信息
+     * @brief 获取当前轨迹点
+     * @return MotorcycleTrajectoryPoint结构体，包含位置、姿态、运动信息
      */
-    Position getFusedPosition();
+    MotorcycleTrajectoryPoint getCurrentPosition();
     
     /**
-     * @brief 切换融合算法
-     * @param algorithm 新的融合算法
-     * @return 是否切换成功
+     * @brief 获取当前运动状态
+     * @return MotorcycleMotionState结构体，包含各种运动检测结果
      */
-    bool switchAlgorithm(FusionAlgorithm algorithm);
+    MotorcycleMotionState getMotionState();
     
     /**
-     * @brief 设置EKF配置参数
+     * @brief 开始记录轨迹
      */
-    void setEKFConfig(const EKFConfig& config);
+    void startRecording();
     
     /**
-     * @brief 设置车辆模型参数
+     * @brief 停止记录轨迹
      */
-    void setVehicleModel(const VehicleModel& model);
+    void stopRecording();
+    
+    /**
+     * @brief 清除轨迹记录
+     */
+    void clearTrajectory();
     
     /**
      * @brief 获取位置精度估计
@@ -217,23 +240,16 @@ public:
     bool isPositionValid();
     
     /**
-     * @brief 设置初始位置
-     * @param lat 纬度
-     * @param lng 经度
-     */
-    void setInitialPosition(double lat, double lng);
-    
-    /**
-     * @brief 重置起始点为当前位置（用于相对位移计算）
-     */
-    void resetOrigin();
-    
-    /**
-     * @brief 设置指定位置为起始点
+     * @brief 设置起始点
      * @param lat 纬度
      * @param lng 经度
      */
     void setOrigin(double lat, double lng);
+    
+    /**
+     * @brief 重置起始点为当前位置
+     */
+    void resetOrigin();
     
     /**
      * @brief 设置更新间隔
@@ -294,24 +310,27 @@ public:
     String getLocationSource();
     
     /**
+     * @brief 获取总距离
+     * @return 总距离（米）
+     */
+    float getTotalDistance();
+    
+    /**
+     * @brief 获取最大速度
+     * @return 最大速度（m/s）
+     */
+    float getMaxSpeed();
+    
+    /**
+     * @brief 获取最大倾斜角
+     * @return 最大倾斜角（度）
+     */
+    float getMaxLeanAngle();
+    
+    /**
      * @brief 重置统计信息
      */
     void resetStats();
-    
-    /**
-     * @brief 校准IMU，以当前位置为水平基准
-     */
-    void calibrateIMU();
-    
-    /**
-     * @brief 重置IMU校准
-     */
-    void resetIMUCalibration();
-    
-    /**
-     * @brief 获取当前使用的算法
-     */
-    FusionAlgorithm getCurrentAlgorithm() const { return currentAlgorithm; }
     
     /**
      * @brief 获取数据源状态

@@ -22,6 +22,11 @@
 #include "location/FusionLocationManager.h"
 #endif
 
+#ifdef ENABLE_BLE
+#include "ble/BLEManager.h"
+#include "ble/BLEDataProvider.h"
+#endif
+
 
 typedef struct
 {
