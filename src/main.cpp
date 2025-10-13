@@ -42,7 +42,6 @@
 
 #ifdef ENABLE_IMU_FUSION
 #include "location/FusionLocationManager.h"
-FusionLocationManager fusionLocationManager;
 #endif
 
 #ifdef ENABLE_BLE
@@ -146,6 +145,16 @@ void taskDataProcessing(void *parameter)
 #ifdef USE_AIR780EG_GSM
     // 调用新库的主循环（处理URC、网络状态更新、GNSS数据更新等）
     air780eg.loop();
+    
+    // 获取GPS数据并更新到融合定位系统
+#ifdef ENABLE_IMU_FUSION
+    if (air780eg.getGNSS().isDataValid()) {
+        double lat = air780eg.getGNSS().getLatitude();
+        double lng = air780eg.getGNSS().getLongitude();
+        float speed = air780eg.getGNSS().getSpeed() / 3.6f; // 转换为m/s
+        fusionLocationManager.updateWithGPS(lat, lng, speed, true);
+    }
+#endif
 #endif
 
 #ifdef ENABLE_COMPASS
@@ -180,41 +189,22 @@ void setup()
 
   device.begin();
 
-  //================ 融合定位初始化开始 ================
+  //================ MadgwickAHRS融合定位初始化开始 ================
 #ifdef ENABLE_IMU_FUSION
-  Serial.println("[融合定位] 初始化融合定位系统...");
-  // 使用EKF车辆模型算法，适合摩托车应用 FUSION_EKF_VEHICLE FUSION_SIMPLE_KALMAN
-  #if FUSION_EKF_VEHICLE_ENABLED == true
-  if (fusionLocationManager.begin(FUSION_EKF_VEHICLE, FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG))
-  #else
-  if (fusionLocationManager.begin(FUSION_SIMPLE_KALMAN, FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG))
-  #endif
-  {
-    Serial.println("[融合定位] ✅ EKF融合定位系统初始化成功");
+  Serial.println("[融合定位] 初始化MadgwickAHRS融合定位系统...");
+  
+  if (fusionLocationManager.begin(FUSION_LOCATION_INITIAL_LAT, FUSION_LOCATION_INITIAL_LNG)) {
+    Serial.println("[融合定位] ✅ MadgwickAHRS融合定位系统初始化成功");
     fusionLocationManager.setDebug(FUSION_LOCATION_DEBUG_ENABLED);
     fusionLocationManager.setUpdateInterval(FUSION_LOCATION_UPDATE_INTERVAL);
-
-    // 设置摩托车专用参数
-    EKFConfig motoConfig;
-    motoConfig.processNoisePos = 0.8f;     // 摩托车位置变化较快
-    motoConfig.processNoiseVel = 3.0f;     // 速度变化较大
-    motoConfig.processNoiseHeading = 0.1f; // 航向变化频繁
-    motoConfig.gpsNoisePos = 16.0f;        // GPS精度约4m
-    motoConfig.imuNoiseAccel = 0.3f;       // 摩托车振动较大
-    fusionLocationManager.setEKFConfig(motoConfig);
-
-    VehicleModel motoModel;
-    motoModel.wheelbase = 1.4f;        // 摩托车轴距
-    motoModel.maxAcceleration = 5.0f;  // 摩托车加速性能好
-    motoModel.maxDeceleration = 12.0f; // 制动性能强
-    motoModel.maxSteeringAngle = 1.0f; // 转向角度大
-    fusionLocationManager.setVehicleModel(motoModel);
-
-    Serial.println("[融合定位] 摩托车专用参数已设置");
+    
+    // 开始记录轨迹
+    fusionLocationManager.startRecording();
+    
+    Serial.println("[融合定位] MadgwickAHRS摩托车惯导系统已启动");
   }
-  else
-  {
-    Serial.println("[融合定位] ❌ 融合定位系统初始化失败");
+  else {
+    Serial.println("[融合定位] ❌ MadgwickAHRS融合定位系统初始化失败");
   }
   
   // 配置兜底定位 - 测试用的短间隔
@@ -222,11 +212,11 @@ void setup()
     true,      // 启用兜底定位
     15000,     // GNSS信号丢失超时时间 15秒（测试用）
     60000,     // LBS定位间隔 1分钟（测试用）
-    120000,     // WiFi定位间隔 120秒
+    120000,    // WiFi定位间隔 120秒
     true       // 优先使用WiFi定位
   );
 #endif
-  //================ 融合定位初始化结束 ================
+  //================ MadgwickAHRS融合定位初始化结束 ================
 
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);

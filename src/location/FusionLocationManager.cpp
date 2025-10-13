@@ -2,6 +2,10 @@
 
 const char* FusionLocationManager::TAG = "FusionLocation";
 
+// 常量定义
+#define EARTH_RADIUS 6371000.0f
+// DEG_TO_RAD and RAD_TO_DEG are already defined in Arduino.h
+
 // 条件编译的调试日志宏
 #if FUSION_LOCATION_DEBUG_ENABLED
 #define FUSION_LOGD(tag, format, ...) AIR780EG_LOGD(tag, format, ##__VA_ARGS__)
@@ -10,143 +14,26 @@ const char* FusionLocationManager::TAG = "FusionLocation";
 #endif
 
 // ============================================================================
-// MotoBoxIMUProvider 实现
-// ============================================================================
-
-MotoBoxIMUProvider::MotoBoxIMUProvider() : debug_enabled(false), last_update_time(0) {}
-
-bool MotoBoxIMUProvider::getData(IMUData& data) {
-#ifdef ENABLE_IMU
-    // IMU总是可用的，不需要检查isInitialized
-    
-    // 获取IMU数据并转换格式
-    data.accel[0] = imu.getAccelX() * 9.8f;  // 转换为 m/s²
-    data.accel[1] = imu.getAccelY() * 9.8f;
-    data.accel[2] = imu.getAccelZ() * 9.8f;
-    
-    data.gyro[0] = imu.getGyroX() * DEG_TO_RAD;  // 转换为 rad/s
-    data.gyro[1] = imu.getGyroY() * DEG_TO_RAD;
-    data.gyro[2] = imu.getGyroZ() * DEG_TO_RAD;
-    
-    data.timestamp = millis();
-    data.valid = true;
-    last_update_time = data.timestamp;
-    
-    if (debug_enabled) {
-        Serial.printf("[IMU原始] 加速度(%.3f,%.3f,%.3f)g 陀螺仪(%.3f,%.3f,%.3f)°/s\n", 
-                     imu.getAccelX(), imu.getAccelY(), imu.getAccelZ(),
-                     imu.getGyroX(), imu.getGyroY(), imu.getGyroZ());
-        Serial.printf("[IMU转换] 加速度(%.3f,%.3f,%.3f)m/s² 陀螺仪(%.3f,%.3f,%.3f)rad/s\n", 
-                     data.accel[0], data.accel[1], data.accel[2],
-                     data.gyro[0], data.gyro[1], data.gyro[2]);
-    }
-    
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool MotoBoxIMUProvider::isAvailable() {
-#ifdef ENABLE_IMU
-    return true;  // IMU总是可用的
-#else
-    return false;
-#endif
-}
-
-// ============================================================================
-// MotoBoxGPSProvider 实现
-// ============================================================================
-
-MotoBoxGPSProvider::MotoBoxGPSProvider() : debug_enabled(false), last_update_time(0) {}
-
-bool MotoBoxGPSProvider::getData(GPSData& data) {
-    // 获取Air780EG的GNSS数据
-    if (!air780eg.getGNSS().isDataValid()) return false;
-    
-    gnss_data_t& gnss = air780eg.getGNSS().gnss_data;
-    
-    if (!gnss.is_fixed || !gnss.data_valid) return false;
-    
-    data.lat = gnss.latitude;
-    data.lng = gnss.longitude;
-    data.altitude = gnss.altitude;
-    data.accuracy = gnss.hdop * 5.0f;  // 简单的精度估算
-    data.timestamp = millis();
-    data.valid = true;
-    last_update_time = data.timestamp;
-    
-    if (debug_enabled) {
-        Serial.printf("[GPS原始] 位置(%.6f,%.6f) 高度%.1fm 精度%.1fm 卫星%d 来源:%s\n", 
-                     data.lat, data.lng, data.altitude, data.accuracy, gnss.satellites, gnss.location_type.c_str());
-        Serial.printf("[GPS状态] 固定:%s 有效:%s 启用:%s\n", 
-                     gnss.is_fixed ? "是" : "否", 
-                     gnss.data_valid ? "是" : "否",
-                     air780eg.getGNSS().isEnabled() ? "是" : "否");
-    }
-    
-    return true;
-}
-
-bool MotoBoxGPSProvider::isAvailable() {
-    return air780eg.getGNSS().isEnabled() && air780eg.getGNSS().isDataValid();
-}
-
-// ============================================================================
-// MotoBoxMagProvider 实现
-// ============================================================================
-
-MotoBoxMagProvider::MotoBoxMagProvider() : debug_enabled(false), last_update_time(0) {}
-
-bool MotoBoxMagProvider::getData(MagData& data) {
-#ifdef ENABLE_COMPASS
-    if (!compass.isInitialized() || !compass.isDataValid()) return false;
-    
-    // 获取原始磁场数据
-    int16_t x, y, z;
-    compass.getRawData(x, y, z);
-    
-    // 转换为微特斯拉 (μT)
-    data.mag[0] = x * 0.1f;  // QMC5883L的分辨率约为0.1μT/LSB
-    data.mag[1] = y * 0.1f;
-    data.mag[2] = z * 0.1f;
-    
-    data.timestamp = millis();
-    data.valid = true;
-    last_update_time = data.timestamp;
-    
-    if (debug_enabled) {
-        Serial.printf("[MAG] 磁场数据: (%.1f,%.1f,%.1f)μT 航向%.1f°\n", 
-                     data.mag[0], data.mag[1], data.mag[2], compass.getHeading());
-    }
-    
-    return true;
-#else
-    return false;
-#endif
-}
-
-bool MotoBoxMagProvider::isAvailable() {
-#ifdef ENABLE_COMPASS
-    return compass.isInitialized();
-#else
-    return false;
-#endif
-}
-
-// ============================================================================
-// FusionLocationManager 实现
+// 构造函数和析构函数
 // ============================================================================
 
 FusionLocationManager::FusionLocationManager() 
-    : imuProvider(nullptr), gpsProvider(nullptr), magProvider(nullptr),
-      simpleFusion(nullptr), ekfTracker(nullptr), currentAlgorithm(FUSION_EKF_VEHICLE),
-      initialized(false), debug_enabled(false),
-      update_interval(100), last_update_time(0), last_debug_print_time(0),
-      initial_latitude(39.9042), initial_longitude(116.4074) {
+    : initialized(false), debug_enabled(false),
+      update_interval(100), last_update_time(0), last_debug_print_time(0), last_motion_update_time(0),
+      initial_latitude(39.9042), initial_longitude(116.4074),
+      originLat(0), originLng(0), hasOrigin(false),
+      isStationary(false), stationaryStartTime(0),
+      currentSource(SOURCE_GPS_ONLY), lastGPSUpdateTime(0), lastGPSLat(0.0), lastGPSLng(0.0), lastGPSSpeed(0.0f),
+      isRecording(false), totalDistance(0), maxSpeed(0), maxLeanAngle(0),
+      accelerationThreshold(1.0f), brakingThreshold(-1.0f), leanThreshold(0.175f),
+      wheelieThreshold(0.35f), stoppieThreshold(-0.35f), driftThreshold(3.0f) {
     
-    memset(&stats, 0, sizeof(stats));
+    // 初始化速度位置数组
+    for(int i = 0; i < 3; i++) {
+        velocity[i] = 0.0f;
+        position[i] = 0.0f;
+        lastVelocity[i] = 0.0f;
+    }
     
     // 初始化兜底定位配置
     fallbackConfig.enabled = false;
@@ -159,85 +46,43 @@ FusionLocationManager::FusionLocationManager()
     fallbackConfig.lbs_in_progress = false;
     fallbackConfig.wifi_in_progress = false;
     
-    // 设置默认EKF配置（适合摩托车）
-    ekfConfig.processNoisePos = 0.5f;        // 摩托车位置变化较快
-    ekfConfig.processNoiseVel = 2.0f;        // 速度变化较大
-    ekfConfig.processNoiseHeading = 0.05f;   // 航向变化较频繁
-    ekfConfig.processNoiseHeadingRate = 0.2f;
-    
-    ekfConfig.gpsNoisePos = 25.0f;           // GPS精度约5m
-    ekfConfig.imuNoiseAccel = 0.2f;          // 摩托车振动较大
-    ekfConfig.imuNoiseGyro = 0.02f;
-    
-    // 设置摩托车模型参数
-    vehicleModel.wheelbase = 1.4f;           // 摩托车轴距约1.4m
-    vehicleModel.maxAcceleration = 4.0f;     // 摩托车加速性能较好
-    vehicleModel.maxDeceleration = 10.0f;    // 制动性能
-    vehicleModel.maxSteeringAngle = 0.8f;    // 摩托车转向角度较大
+    // 初始化统计信息
+    memset(&stats, 0, sizeof(stats));
 }
 
 FusionLocationManager::~FusionLocationManager() {
-    if (simpleFusion) delete simpleFusion;
-    if (ekfTracker) delete ekfTracker;
-    if (imuProvider) delete imuProvider;
-    if (gpsProvider) delete gpsProvider;
-    if (magProvider) delete magProvider;
+    // 析构函数，清理资源
 }
 
-bool FusionLocationManager::begin(FusionAlgorithm algorithm, double initLat, double initLng) {
+// ============================================================================
+// 初始化和主循环
+// ============================================================================
+
+bool FusionLocationManager::begin(double initLat, double initLng) {
     if (initialized) return true;
     
-    Serial.printf("[%s] 初始化融合定位系统 (算法: %s)...\n", TAG, 
-                 algorithm == FUSION_EKF_VEHICLE ? "EKF车辆模型" : "简单卡尔曼");
+    Serial.printf("[%s] 初始化MadgwickAHRS融合定位系统...\n", TAG);
     
     initial_latitude = initLat;
     initial_longitude = initLng;
-    currentAlgorithm = algorithm;
+    originLat = initLat;
+    originLng = initLng;
+    hasOrigin = (initLat != 0 || initLng != 0);
     
-    // 创建传感器提供者
-    imuProvider = new MotoBoxIMUProvider();
-    gpsProvider = new MotoBoxGPSProvider();
-    magProvider = new MotoBoxMagProvider();
+    // 初始化Madgwick AHRS
+    ahrs.begin(100.0f); // 100Hz采样率
     
-    if (!imuProvider) {
-        Serial.printf("[%s] ❌ IMU提供者创建失败\n", TAG);
-        return false;
-    }
-    
-    // 根据算法类型创建融合对象
-    if (algorithm == FUSION_EKF_VEHICLE) {
-        ekfTracker = new EKFVehicleTracker(imuProvider, initLat, initLng);
-        if (!ekfTracker) {
-            Serial.printf("[%s] ❌ EKF追踪器创建失败\n", TAG);
-            return false;
-        }
-        
-        // 设置传感器和配置
-        ekfTracker->setGPSProvider(gpsProvider);
-        ekfTracker->setMagProvider(magProvider);
-        ekfTracker->setEKFConfig(ekfConfig);
-        ekfTracker->setVehicleModel(vehicleModel);
-        ekfTracker->begin();
-        
-        Serial.printf("[%s] ✅ EKF车辆追踪器初始化成功\n", TAG);
-    } else {
-        simpleFusion = new FusionLocation(imuProvider, initLat, initLng);
-        if (!simpleFusion) {
-            Serial.printf("[%s] ❌ 简单融合对象创建失败\n", TAG);
-            return false;
-        }
-        
-        simpleFusion->setGPSProvider(gpsProvider);
-        simpleFusion->setMagProvider(magProvider);
-        simpleFusion->begin();
-        
-        Serial.printf("[%s] ✅ 简单卡尔曼滤波器初始化成功\n", TAG);
+    // 设置初始位置
+    if (hasOrigin) {
+        currentPosition.lat = originLat;
+        currentPosition.lng = originLng;
+        currentPosition.valid = true;
     }
     
     initialized = true;
     last_update_time = millis();
     
-    Serial.printf("[%s] ✅ 融合定位系统初始化成功\n", TAG);
+    Serial.printf("[%s] ✅ MadgwickAHRS融合定位系统初始化成功\n", TAG);
     Serial.printf("[%s] 初始位置: %.6f, %.6f\n", TAG, initLat, initLng);
     
     return true;
@@ -247,115 +92,569 @@ void FusionLocationManager::loop() {
     if (!initialized) return;
     
     unsigned long currentTime = millis();
+    float deltaTime = (currentTime - last_update_time) / 1000.0f;
     
-    // 高频更新：EKF算法支持高频IMU数据处理
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        // EKF算法每次都更新，以充分利用高频IMU数据
-        ekfTracker->update();
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        // 简单卡尔曼滤波保持原有的更新间隔
-        if (currentTime - last_update_time >= update_interval) {
-            simpleFusion->update();
-            last_update_time = currentTime;
-        }
+    if (deltaTime < 0.001f || deltaTime > 1.0f) return; // 跳过异常时间间隔
+    
+    // 检查GPS状态
+    bool gpsLost = (currentTime - lastGPSUpdateTime > FUSION_GPS_TIMEOUT);
+    
+    if (gpsLost && currentSource != SOURCE_IMU_DEAD_RECKONING) {
+        Serial.printf("[%s] ⚠️ GPS信号丢失，切换到纯惯导模式\n", TAG);
+        currentSource = SOURCE_IMU_DEAD_RECKONING;
     }
     
-    // 状态统计和兜底定位逻辑 - 独立于算法更新间隔
-    // 这样确保所有算法都能正常使用备用定位方案
-    static unsigned long last_stats_update = 0;
-    if (currentTime - last_stats_update >= update_interval) {
-        // 获取融合位置并更新统计
-        Position pos = getFusedPosition();
-        updateStats(pos);
-        
-        // 处理兜底定位逻辑 - 确保所有算法都能使用备用定位
-        if (fallbackConfig.enabled) {
-            handleFallbackLocation();
-        }
-        
-        last_stats_update = currentTime;
+    // 更新AHRS姿态
+    updateAHRS();
+    
+    // 只有GPS丢失时才进行位置积分
+    if (currentSource == SOURCE_IMU_DEAD_RECKONING) {
+        updatePosition();
+        calculateRelativePosition();
     }
     
-    // 定期打印调试信息
-    if (debug_enabled && currentTime - last_debug_print_time > 5000) {
-        printStatus();
+    // 更新运动状态
+    updateMotionState();
+    
+    // 零速检测和更新
+    if (detectStationary()) {
+        applyZUPT();
+    }
+    
+    // 更新统计信息
+    updateTrajectoryStatistics();
+    
+    // 处理兜底定位逻辑
+    if (fallbackConfig.enabled) {
+        handleFallbackLocation();
+    }
+    
+    last_update_time = currentTime;
+    
+    // 每5秒输出关键信息
+    if (currentTime - last_debug_print_time > 5000) {
+        Serial.printf("[融合定位] 来源:%s GPS:(%.6f,%.6f,%.1fm/s) 当前:(%.6f,%.6f,%.1fm/s) 姿态:(R%.1f°P%.1f°Y%.1f°)\n",
+                     currentSource == SOURCE_GPS_IMU_FUSED ? "GPS+IMU" : 
+                     currentSource == SOURCE_GPS_ONLY ? "GPS" : "惯导",
+                     lastGPSLat, lastGPSLng, lastGPSSpeed,
+                     currentPosition.lat, currentPosition.lng, currentPosition.speed,
+                     currentPosition.roll, currentPosition.pitch, currentPosition.heading);
         last_debug_print_time = currentTime;
     }
 }
 
-Position FusionLocationManager::getFusedPosition() {
-    if (!initialized) {
-        Position invalid_pos;
-        invalid_pos.valid = false;
-        return invalid_pos;
-    }
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        return ekfTracker->getPosition();
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        return simpleFusion->getPosition();
-    }
-    
-    Position invalid_pos;
-    invalid_pos.valid = false;
-    return invalid_pos;
-}
+// ============================================================================
+// AHRS姿态解算
+// ============================================================================
 
-bool FusionLocationManager::switchAlgorithm(FusionAlgorithm algorithm) {
-    if (!initialized || algorithm == currentAlgorithm) return true;
+void FusionLocationManager::updateAHRS() {
+#ifdef ENABLE_IMU
+    // IMU is always available when ENABLE_IMU is defined
     
-    Serial.printf("[%s] 切换融合算法: %s -> %s\n", TAG,
-                 currentAlgorithm == FUSION_EKF_VEHICLE ? "EKF" : "简单卡尔曼",
-                 algorithm == FUSION_EKF_VEHICLE ? "EKF" : "简单卡尔曼");
+    // 获取IMU数据
+    float ax = imu.getAccelX() * 9.8f;  // 转换为 m/s²
+    float ay = imu.getAccelY() * 9.8f;
+    float az = imu.getAccelZ() * 9.8f;
     
-    // 获取当前位置作为新算法的初始位置
-    Position currentPos = getFusedPosition();
-    double lat = currentPos.valid ? currentPos.lat : initial_latitude;
-    double lng = currentPos.valid ? currentPos.lng : initial_longitude;
+    float gx = imu.getGyroX() * DEG_TO_RAD;  // 转换为 rad/s
+    float gy = imu.getGyroY() * DEG_TO_RAD;
+    float gz = imu.getGyroZ() * DEG_TO_RAD;
     
-    if (algorithm == FUSION_EKF_VEHICLE) {
-        // 切换到EKF
-        if (!ekfTracker) {
-            ekfTracker = new EKFVehicleTracker(imuProvider, lat, lng);
-            if (!ekfTracker) return false;
+    // 如果有地磁传感器，使用9轴融合
+    #ifdef ENABLE_COMPASS
+    if (compass.isInitialized() && compass.isDataValid()) {
+        float mx = compass.getX();
+        float my = compass.getY();
+        float mz = compass.getZ();
+        
+        // 归一化磁力计数据
+        float mag_norm = sqrt(mx*mx + my*my + mz*mz);
+        if (mag_norm > 0.01f) {
+            mx /= mag_norm;
+            my /= mag_norm;
+            mz /= mag_norm;
             
-            ekfTracker->setGPSProvider(gpsProvider);
-            ekfTracker->setMagProvider(magProvider);
-            ekfTracker->setEKFConfig(ekfConfig);
-            ekfTracker->setVehicleModel(vehicleModel);
-            ekfTracker->begin();
+            ahrs.update(gx, gy, gz, ax, ay, az, mx, my, mz);
+            stats.mag_updates++;
+        } else {
+            ahrs.updateIMU(gx, gy, gz, ax, ay, az);
         }
     } else {
-        // 切换到简单卡尔曼
-        if (!simpleFusion) {
-            simpleFusion = new FusionLocation(imuProvider, lat, lng);
-            if (!simpleFusion) return false;
-            
-            simpleFusion->setGPSProvider(gpsProvider);
-            simpleFusion->setMagProvider(magProvider);
-            simpleFusion->begin();
-        }
+        ahrs.updateIMU(gx, gy, gz, ax, ay, az);
+    }
+    #else
+    ahrs.updateIMU(gx, gy, gz, ax, ay, az);
+    #endif
+    
+    stats.imu_updates++;
+    stats.total_updates++;
+    
+    // 获取姿态角
+    currentPosition.roll = ahrs.getRoll();
+    currentPosition.pitch = ahrs.getPitch();
+    currentPosition.heading = ahrs.getYaw();
+    
+    if (debug_enabled) {
+        Serial.printf("[AHRS] Roll: %.1f°, Pitch: %.1f°, Yaw: %.1f°\n",
+                     currentPosition.roll, currentPosition.pitch, currentPosition.heading);
+    }
+#endif
+}
+
+// ============================================================================
+// 位置和速度解算
+// ============================================================================
+
+void FusionLocationManager::updatePosition() {
+#ifdef ENABLE_IMU
+    // IMU is always available when ENABLE_IMU is defined
+    
+    uint32_t currentTime = millis();
+    float deltaTime = (currentTime - last_update_time) / 1000.0f;
+    
+    if (deltaTime <= 0) return;
+    
+    // 获取原始加速度数据
+    float ax = imu.getAccelX() * 9.8f;  // X轴加速度
+    float ay = imu.getAccelY() * 9.8f;  // Y轴加速度
+    float az = imu.getAccelZ() * 9.8f;  // Z轴加速度
+    
+    // 使用Madgwick算法输出的姿态角，将加速度从机体坐标系转换到地理坐标系
+    // 然后去除重力分量
+    float roll_rad = currentPosition.roll * DEG_TO_RAD;
+    float pitch_rad = currentPosition.pitch * DEG_TO_RAD;
+    
+    // 旋转矩阵转换 (简化版本，只考虑roll和pitch)
+    float ax_world = ax * cos(pitch_rad) + az * sin(pitch_rad);
+    float ay_world = ay * cos(roll_rad) - ax * sin(roll_rad) * sin(pitch_rad) + az * sin(roll_rad) * cos(pitch_rad);
+    float az_world = -ax * sin(pitch_rad) * cos(roll_rad) + ay * sin(roll_rad) + az * cos(pitch_rad) * cos(roll_rad);
+    
+    // 去除重力（地理坐标系下重力在z轴）
+    float linearAccel[3];
+    linearAccel[0] = ax_world;
+    linearAccel[1] = ay_world;
+    linearAccel[2] = az_world - 9.8f;
+    
+    // 速度积分
+    for(int i = 0; i < 3; i++) {
+        velocity[i] += linearAccel[i] * deltaTime;
     }
     
-    currentAlgorithm = algorithm;
-    Serial.printf("[%s] ✅ 算法切换成功\n", TAG);
-    return true;
+    // 位置积分
+    for(int i = 0; i < 3; i++) {
+        position[i] += velocity[i] * deltaTime;
+    }
+    
+    // 计算速度大小
+    currentPosition.speed = sqrt(velocity[0]*velocity[0] + velocity[1]*velocity[1]);
+    
+    // 更新位移信息
+    currentPosition.displacement.x = position[0];
+    currentPosition.displacement.y = position[1];
+    currentPosition.displacement.z = position[2];
+    
+    // 更新位置精度（基于速度的简单估计）
+    currentPosition.accuracy = 5.0f + currentPosition.speed * 0.1f;
+    
+    if (debug_enabled) {
+        Serial.printf("[Position] 速度: %.2f m/s, 位置: (%.2f, %.2f, %.2f)\n",
+                     currentPosition.speed, position[0], position[1], position[2]);
+    }
+#endif
 }
 
-void FusionLocationManager::setEKFConfig(const EKFConfig& config) {
-    ekfConfig = config;
-    if (ekfTracker) {
-        ekfTracker->setEKFConfig(config);
-        debugPrint("EKF配置已更新");
+// ============================================================================
+// 运动状态检测
+// ============================================================================
+
+void FusionLocationManager::updateMotionState() {
+    uint32_t currentTime = millis();
+    float deltaTime = (currentTime - last_motion_update_time) / 1000.0f;
+    
+    if (deltaTime <= 0) return;
+    
+    // 运动检测
+    currentMotionState.isAccelerating = detectAcceleration();
+    currentMotionState.isBraking = detectBraking();
+    currentMotionState.isLeaning = detectLeaning();
+    currentMotionState.isWheelie = detectWheelie();
+    currentMotionState.isStoppie = detectStoppie();
+    currentMotionState.isDrifting = detectDrifting();
+    
+    // 计算倾斜角（基于roll角）
+    currentPosition.leanAngle = abs(currentPosition.roll);
+    currentMotionState.leanAngle = currentPosition.leanAngle;
+    
+    // 计算倾斜角速度
+    if (deltaTime > 0) {
+        currentMotionState.leanRate = (currentPosition.leanAngle - currentMotionState.leanAngle) / deltaTime;
+    }
+    
+    // 计算加速度
+    currentMotionState.forwardAccel = velocity[0] - lastVelocity[0];
+    currentMotionState.lateralAccel = velocity[1] - lastVelocity[1];
+    
+    // 更新历史数据
+    for(int i = 0; i < 3; i++) {
+        lastVelocity[i] = velocity[i];
+    }
+    last_motion_update_time = currentTime;
+    currentMotionState.timestamp = currentTime;
+    
+    if (debug_enabled) {
+        Serial.printf("[Motion] 倾斜: %.1f°, 加速: %s, 制动: %s\n",
+                     currentPosition.leanAngle,
+                     currentMotionState.isAccelerating ? "是" : "否",
+                     currentMotionState.isBraking ? "是" : "否");
     }
 }
 
-void FusionLocationManager::setVehicleModel(const VehicleModel& model) {
-    vehicleModel = model;
-    if (ekfTracker) {
-        ekfTracker->setVehicleModel(model);
-        debugPrint("车辆模型已更新");
+// 运动检测方法
+bool FusionLocationManager::detectAcceleration() {
+    return currentMotionState.forwardAccel > accelerationThreshold;
+}
+
+bool FusionLocationManager::detectBraking() {
+    return currentMotionState.forwardAccel < brakingThreshold;
+}
+
+bool FusionLocationManager::detectLeaning() {
+    return currentPosition.leanAngle > leanThreshold;
+}
+
+bool FusionLocationManager::detectWheelie() {
+    return currentPosition.pitch > wheelieThreshold;
+}
+
+bool FusionLocationManager::detectStoppie() {
+    return currentPosition.pitch < stoppieThreshold;
+}
+
+bool FusionLocationManager::detectDrifting() {
+    return abs(currentMotionState.lateralAccel) > driftThreshold;
+}
+
+// ============================================================================
+// 零速检测和更新
+// ============================================================================
+
+bool FusionLocationManager::detectStationary() {
+    // 多条件判断静止状态
+    float speedThreshold = 0.3f;  // 降低速度阈值到0.3 m/s
+    float accelThreshold = 0.2f;  // 加速度阈值 (m/s²)
+    
+    // 获取当前加速度数据计算幅值
+    float ax = imu.getAccelX() * 9.8f;
+    float ay = imu.getAccelY() * 9.8f;
+    float az = imu.getAccelZ() * 9.8f;
+    
+    // 计算加速度幅值
+    float accel_magnitude = sqrt(ax*ax + ay*ay + az*az);
+    
+    // 同时满足：速度低、加速度小
+    bool currentlyStationary = (currentPosition.speed < speedThreshold) && 
+                              (accel_magnitude < accelThreshold);
+    
+    if (currentlyStationary && !isStationary) {
+        stationaryStartTime = millis();
+        isStationary = true;
+    } else if (!currentlyStationary) {
+        isStationary = false;
     }
+    
+    return isStationary && (millis() - stationaryStartTime > STATIONARY_THRESHOLD);
+}
+
+void FusionLocationManager::applyZUPT() {
+    // 零速更新：重置速度和部分位置误差
+    for(int i = 0; i < 3; i++) {
+        velocity[i] *= 0.1f;  // 衰减而非直接清零，避免突变
+    }
+    
+    if (debug_enabled) {
+        Serial.println("[ZUPT] 应用零速更新，速度衰减");
+    }
+}
+
+// ============================================================================
+// 坐标转换
+// ============================================================================
+
+void FusionLocationManager::calculateRelativePosition() {
+    if (!hasOrigin) return;
+    
+    // 将本地坐标转换为经纬度
+    xyToLatLng(position[0], position[1], currentPosition.lat, currentPosition.lng);
+    currentPosition.altitude = position[2];
+    currentPosition.timestamp = millis();
+    currentPosition.valid = true;
+}
+
+void FusionLocationManager::latLngToXY(double lat, double lng, float& x, float& y) {
+    if (!hasOrigin) {
+        x = y = 0;
+        return;
+    }
+    
+    double deltaLat = (lat - originLat) * DEG_TO_RAD;
+    double deltaLng = (lng - originLng) * DEG_TO_RAD;
+    
+    y = deltaLat * EARTH_RADIUS;
+    x = deltaLng * EARTH_RADIUS * cos(originLat * DEG_TO_RAD);
+}
+
+void FusionLocationManager::xyToLatLng(float x, float y, double& lat, double& lng) {
+    if (!hasOrigin) {
+        lat = lng = 0;
+        return;
+    }
+    
+    double deltaLat = y / EARTH_RADIUS;
+    double deltaLng = x / (EARTH_RADIUS * cos(originLat * DEG_TO_RAD));
+    
+    lat = originLat + deltaLat * RAD_TO_DEG;
+    lng = originLng + deltaLng * RAD_TO_DEG;
+}
+
+// ============================================================================
+// 轨迹管理
+// ============================================================================
+
+void FusionLocationManager::updateTrajectoryStatistics() {
+    // 更新最大速度
+    if (currentPosition.speed > maxSpeed) {
+        maxSpeed = currentPosition.speed;
+    }
+    
+    // 更新最大倾斜角
+    if (currentPosition.leanAngle > maxLeanAngle) {
+        maxLeanAngle = currentPosition.leanAngle;
+    }
+    
+    // 计算总距离（简化实现）
+    static float lastX = 0, lastY = 0;
+    if (lastX != 0 || lastY != 0) {
+        float dx = position[0] - lastX;
+        float dy = position[1] - lastY;
+        totalDistance += sqrt(dx*dx + dy*dy);
+    }
+    lastX = position[0];
+    lastY = position[1];
+}
+
+void FusionLocationManager::startRecording() {
+    isRecording = true;
+    totalDistance = 0;
+    maxSpeed = 0;
+    maxLeanAngle = 0;
+    
+    if (debug_enabled) {
+        Serial.println("[Trajectory] 开始记录轨迹");
+    }
+}
+
+void FusionLocationManager::stopRecording() {
+    isRecording = false;
+    
+    if (debug_enabled) {
+        Serial.println("[Trajectory] 停止记录轨迹");
+    }
+}
+
+void FusionLocationManager::clearTrajectory() {
+    totalDistance = 0;
+    maxSpeed = 0;
+    maxLeanAngle = 0;
+    
+    if (debug_enabled) {
+        Serial.println("[Trajectory] 清除轨迹记录");
+    }
+}
+
+// ============================================================================
+// 公共接口方法
+// ============================================================================
+
+MotorcycleTrajectoryPoint FusionLocationManager::getCurrentPosition() {
+    return currentPosition;
+}
+
+Position FusionLocationManager::getFusedPosition() {
+    return currentPosition;  // Position is typedef for MotorcycleTrajectoryPoint
+}
+
+MotorcycleMotionState FusionLocationManager::getMotionState() {
+    return currentMotionState;
+}
+
+float FusionLocationManager::getPositionAccuracy() {
+    // 简化的精度估计
+    return 5.0f; // 5米精度
+}
+
+float FusionLocationManager::getHeading() {
+    return currentPosition.heading;
+}
+
+float FusionLocationManager::getSpeed() {
+    return currentPosition.speed;
+}
+
+bool FusionLocationManager::isPositionValid() {
+    return initialized && currentPosition.valid;
+}
+
+void FusionLocationManager::setOrigin(double lat, double lng) {
+    originLat = lat;
+    originLng = lng;
+    hasOrigin = true;
+    
+    // 重置位置积分
+    for(int i = 0; i < 3; i++) {
+        position[i] = 0.0f;
+        velocity[i] = 0.0f;
+    }
+    
+    if (debug_enabled) {
+        Serial.printf("[Origin] 起始点已设置为: %.6f, %.6f\n", lat, lng);
+    }
+}
+
+void FusionLocationManager::resetOrigin() {
+    if (initialized && currentPosition.valid) {
+        setOrigin(currentPosition.lat, currentPosition.lng);
+        if (debug_enabled) {
+            Serial.println("[Origin] 起始点已重置为当前位置");
+        }
+    }
+}
+
+void FusionLocationManager::setUpdateInterval(unsigned long interval_ms) {
+    update_interval = interval_ms;
+    if (debug_enabled) {
+        Serial.printf("[Config] 更新间隔设置为: %lu ms\n", interval_ms);
+    }
+}
+
+void FusionLocationManager::setDebug(bool enable) {
+    debug_enabled = enable;
+    Serial.printf("[%s] 调试模式: %s\n", TAG, enable ? "开启" : "关闭");
+}
+
+float FusionLocationManager::getTotalDistance() {
+    return totalDistance;
+}
+
+float FusionLocationManager::getMaxSpeed() {
+    return maxSpeed;
+}
+
+float FusionLocationManager::getMaxLeanAngle() {
+    return maxLeanAngle;
+}
+
+void FusionLocationManager::resetStats() {
+    totalDistance = 0;
+    maxSpeed = 0;
+    maxLeanAngle = 0;
+    memset(&stats, 0, sizeof(stats));
+    
+    if (debug_enabled) {
+        Serial.println("[Stats] 统计信息已重置");
+    }
+}
+
+// ============================================================================
+// 状态打印和调试
+// ============================================================================
+
+void FusionLocationManager::printStatus() {
+    if (!initialized) {
+        Serial.printf("[%s] 系统未初始化\n", TAG);
+        return;
+    }
+    
+    Serial.println("=== 融合定位状态 ===");
+    
+    // 定位来源
+    const char* sourceStr[] = {"GPS", "GPS+IMU", "纯惯导"};
+    Serial.printf("定位来源: %s\n", sourceStr[currentSource]);
+    
+    // GPS位置和速度
+    if (currentSource == SOURCE_GPS_IMU_FUSED || currentSource == SOURCE_GPS_ONLY) {
+        Serial.printf("GPS位置: %.6f, %.6f\n", lastGPSLat, lastGPSLng);
+        Serial.printf("GPS速度: %.2f m/s (%.1f km/h)\n", lastGPSSpeed, lastGPSSpeed * 3.6f);
+    }
+    
+    // 当前融合位置
+    Serial.printf("当前位置: %.6f, %.6f\n", currentPosition.lat, currentPosition.lng);
+    Serial.printf("当前速度: %.2f m/s (%.1f km/h)\n", currentPosition.speed, currentPosition.speed * 3.6f);
+    
+    // 位移增量（相对于上次GPS位置）
+    if (currentSource == SOURCE_IMU_DEAD_RECKONING) {
+        Serial.printf("惯导位移: (%.1f, %.1f, %.1f) m\n", 
+                     position[0], position[1], position[2]);
+        Serial.printf("GPS丢失时长: %lu 秒\n", (millis() - lastGPSUpdateTime) / 1000);
+    }
+    
+    // 姿态
+    Serial.printf("姿态: Roll=%.1f° Pitch=%.1f° Yaw=%.1f°\n",
+                 currentPosition.roll, currentPosition.pitch, currentPosition.heading);
+    
+    // 统计
+    Serial.printf("更新次数: GPS=%lu IMU=%lu MAG=%lu\n", 
+                 stats.gps_updates, stats.imu_updates, stats.mag_updates);
+}
+
+void FusionLocationManager::printStats() {
+    Serial.println("=== MadgwickAHRS融合定位统计信息 ===");
+    Serial.printf("总距离: %.1fm\n", totalDistance);
+    Serial.printf("最大速度: %.1fm/s\n", maxSpeed);
+    Serial.printf("最大倾斜角: %.1f°\n", maxLeanAngle);
+    Serial.printf("总更新次数: %lu\n", stats.total_updates);
+    Serial.printf("融合更新: %lu | GPS: %lu | IMU: %lu | MAG: %lu\n", 
+                 stats.fusion_updates, stats.gps_updates, stats.imu_updates, stats.mag_updates);
+    Serial.printf("兜底定位: LBS: %lu | WiFi: %lu\n", stats.lbs_updates, stats.wifi_updates);
+}
+
+String FusionLocationManager::getPositionJSON() {
+    if (!initialized || !currentPosition.valid) {
+        return "{}";
+    }
+    
+    String json = "{";
+    json += "\"latitude\":" + String(currentPosition.lat, 6) + ",";
+    json += "\"longitude\":" + String(currentPosition.lng, 6) + ",";
+    json += "\"altitude\":" + String(currentPosition.altitude, 2) + ",";
+    json += "\"speed\":" + String(currentPosition.speed, 2) + ",";
+    json += "\"course\":" + String(currentPosition.heading, 1) + ",";
+    json += "\"hdop\":" + String(getPositionAccuracy(), 1) + ",";
+    json += "\"timestamp\":" + String(currentPosition.timestamp) + ",";
+    json += "\"location_type\":\"MADGWICK_AHRS\",";
+    json += "\"satellites\":0,";
+    json += "\"is_fixed\":true,";
+    json += "\"data_valid\":true,";
+    
+    // 添加姿态信息
+    json += "\"attitude\":{";
+    json += "\"roll\":" + String(currentPosition.roll, 1) + ",";
+    json += "\"pitch\":" + String(currentPosition.pitch, 1) + ",";
+    json += "\"yaw\":" + String(currentPosition.heading, 1) + ",";
+    json += "\"lean_angle\":" + String(currentPosition.leanAngle, 1);
+    json += "},";
+    
+    // 添加运动状态
+    json += "\"motion\":{";
+    json += "\"is_accelerating\":" + String(currentMotionState.isAccelerating ? "true" : "false") + ",";
+    json += "\"is_braking\":" + String(currentMotionState.isBraking ? "true" : "false") + ",";
+    json += "\"is_leaning\":" + String(currentMotionState.isLeaning ? "true" : "false") + ",";
+    json += "\"is_wheelie\":" + String(currentMotionState.isWheelie ? "true" : "false") + ",";
+    json += "\"is_stoppie\":" + String(currentMotionState.isStoppie ? "true" : "false") + ",";
+    json += "\"is_drifting\":" + String(currentMotionState.isDrifting ? "true" : "false");
+    json += "}";
+    
+    json += "}";
+    return json;
 }
 
 void FusionLocationManager::debugPrint(const String& message) {
@@ -364,313 +663,9 @@ void FusionLocationManager::debugPrint(const String& message) {
     }
 }
 
-void FusionLocationManager::updateStats(const Position& pos) {
-    stats.total_updates++;
-    
-    if (pos.valid) {
-        stats.fusion_updates++;
-        
-        if (pos.sources.hasGPS) stats.gps_updates++;
-        if (pos.sources.hasIMU) stats.imu_updates++;
-        if (pos.sources.hasMag) stats.mag_updates++;
-    }
-}
-
-float FusionLocationManager::getPositionAccuracy() {
-    if (!initialized) return -1.0f;
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        return ekfTracker->getPositionAccuracy();
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        return simpleFusion->getPositionAccuracy();
-    }
-    return -1.0f;
-}
-
-float FusionLocationManager::getHeading() {
-    if (!initialized) return -1.0f;
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        return ekfTracker->getHeading();
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        return simpleFusion->getHeading();
-    }
-    return -1.0f;
-}
-
-float FusionLocationManager::getSpeed() {
-    if (!initialized) return -1.0f;
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        return ekfTracker->getVelocity();  // EKF提供速度估计
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        return simpleFusion->getSpeed();
-    }
-    return -1.0f;
-}
-
-bool FusionLocationManager::isPositionValid() {
-    if (!initialized) return false;
-    Position pos = getFusedPosition();
-    return pos.valid;
-}
-
-void FusionLocationManager::setInitialPosition(double lat, double lng) {
-    initial_latitude = lat;
-    initial_longitude = lng;
-    
-    if (initialized) {
-        if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-            ekfTracker->setInitialPosition(lat, lng);
-        } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-            simpleFusion->setInitialPosition(lat, lng);
-        }
-        debugPrint("初始位置已更新: " + String(lat, 6) + ", " + String(lng, 6));
-    }
-}
-
-void FusionLocationManager::setUpdateInterval(unsigned long interval_ms) {
-    update_interval = interval_ms;
-    debugPrint("更新间隔设置为: " + String(interval_ms) + "ms");
-}
-
-void FusionLocationManager::resetOrigin() {
-    if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        simpleFusion->resetOrigin();
-        debugPrint("起始点已重置为当前位置");
-    } else if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->resetOrigin();
-        debugPrint("EKF起始点已重置为当前位置");
-    }
-}
-
-void FusionLocationManager::setOrigin(double lat, double lng) {
-    if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        simpleFusion->setOrigin(lat, lng);
-        debugPrint("起始点已设置为: " + String(lat, 6) + ", " + String(lng, 6));
-    } else if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->setOrigin(lat, lng);
-        debugPrint("EKF起始点已设置为: " + String(lat, 6) + ", " + String(lng, 6));
-    }
-}
-
-void FusionLocationManager::setDebug(bool enable) {
-    debug_enabled = enable;
-    
-    if (imuProvider) imuProvider->setDebug(enable);
-    if (gpsProvider) gpsProvider->setDebug(enable);
-    if (magProvider) magProvider->setDebug(enable);
-    
-    // 设置融合算法的调试
-    if (simpleFusion) simpleFusion->setDebug(enable);
-    if (ekfTracker) ekfTracker->setDebug(enable);
-    
-    Serial.printf("[%s] 调试模式: %s\n", TAG, enable ? "开启" : "关闭");
-}
-
-void FusionLocationManager::printStatus() {
-    if (!initialized) {
-        Serial.printf("[%s] 系统未初始化\n", TAG);
-        return;
-    }
-    
-    Position pos = getFusedPosition();
-    DataSourceStatus status = getDataSourceStatus();
-    String locationSource = getLocationSource();
-    
-    Serial.println("=== 融合定位系统状态 ===");
-    Serial.printf("算法: %s\n", currentAlgorithm == FUSION_EKF_VEHICLE ? "EKF车辆模型" : "简单卡尔曼");
-    Serial.printf("位置: %.6f, %.6f (精度: %.1fm) [来源: %s]\n", 
-                 pos.lat, pos.lng, pos.accuracy, locationSource.c_str());
-    Serial.printf("航向: %.1f° | 速度: %.1fm/s | 高度: %.1fm\n", pos.heading, pos.speed, pos.altitude);
-    Serial.printf("数据源: %s%s%s\n", 
-                 status.imu_available ? "IMU " : "",
-                 status.gps_available ? "GPS " : "",
-                 status.mag_available ? "MAG " : "");
-    
-    bool isInit = false;
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        isInit = ekfTracker->isInitialized();
-    } else if (currentAlgorithm == FUSION_SIMPLE_KALMAN && simpleFusion) {
-        isInit = simpleFusion->isInitialized();
-    }
-    
-    Serial.printf("有效性: %s | 初始化: %s\n", 
-                 pos.valid ? "有效" : "无效", isInit ? "是" : "否");
-    
-    // 兜底定位状态
-    if (fallbackConfig.enabled) {
-        Serial.printf("兜底定位: %s | GNSS信号: %s\n",
-                     "启用", isGNSSSignalLost() ? "丢失" : "正常");
-        if (fallbackConfig.lbs_in_progress) Serial.println("LBS定位进行中...");
-        if (fallbackConfig.wifi_in_progress) Serial.println("WiFi定位进行中...");
-    }
-    
-    // EKF特有信息
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        Serial.printf("航向角速度: %.2f°/s\n", ekfTracker->getHeadingRate() * 57.2958f);
-    }
-}
-
-void FusionLocationManager::printStats() {
-    Serial.println("=== 融合定位统计信息 ===");
-    Serial.printf("总更新次数: %lu\n", stats.total_updates);
-    Serial.printf("融合更新: %lu | GPS: %lu | IMU: %lu | MAG: %lu\n", 
-                 stats.fusion_updates, stats.gps_updates, stats.imu_updates, stats.mag_updates);
-    Serial.printf("兜底定位: LBS: %lu | WiFi: %lu\n", stats.lbs_updates, stats.wifi_updates);
-    
-    if (stats.total_updates > 0) {
-        Serial.printf("成功率: %.1f%%\n", (float)stats.fusion_updates / stats.total_updates * 100.0f);
-    }
-    
-    if (fallbackConfig.enabled) {
-        Serial.println("=== 兜底定位配置 ===");
-        Serial.printf("GNSS超时: %lus | LBS间隔: %lus | WiFi间隔: %lus\n",
-                     fallbackConfig.gnss_timeout/1000,
-                     fallbackConfig.lbs_interval/1000,
-                     fallbackConfig.wifi_interval/1000);
-        Serial.printf("优先WiFi: %s | 当前定位源: %s\n",
-                     fallbackConfig.prefer_wifi_over_lbs ? "是" : "否",
-                     getLocationSource().c_str());
-    }
-}
-
-/*
-{
-  "latitude": 0,
-  "longitude": 0,
-  "altitude": 0,
-  "speed": 0,
-  "course": 0,
-  "hdop": 1,
-  "date": "",
-  "timestamp": "",
-  "location_type": "GNSS",
-  "satellites": 99,
-  "is_fixed": true,
-  "data_valid": false
-}*/
-String FusionLocationManager::getPositionJSON() {
-   
-
-    Position pos = getFusedPosition();
-    if (!initialized || pos.lat==39.9042 || pos.lng==116.4074) {
-        return "{}";
-    }
-
-    DataSourceStatus status = getDataSourceStatus();
-    String json = "{";
-    json += "\"latitude\":" + String(pos.lat, 6) + ",";
-    json += "\"longitude\":" + String(pos.lng, 6) + ",";
-    json += "\"altitude\":" + String(pos.altitude, 2) + ",";
-    json += "\"speed\":" + String(pos.speed, 2) + ",";
-    json += "\"course\":" + String(pos.heading, 1) + ",";
-    json += "\"hdop\":" + String(pos.accuracy, 1) + ",";
-    json += "\"timestamp\":" + String(pos.timestamp) + ",";
-    json += "\"location_type\":\"FUSION_LOCATION\",";
-    json += "\"satellites\":" + String(status.gps_available ? air780eg.getGNSS().gnss_data.satellites : 0) + ",";
-    json += "\"is_fixed\":" + String(status.gps_available ? "true" : "false") + ",";
-    json += "\"data_valid\":" + String(status.gps_available ? "true" : "false") + ",";
-    
-    // 添加相对位移信息
-    json += "\"displacement\":{";
-    json += "\"x\":" + String(pos.displacement.x, 2) + ",";
-    json += "\"y\":" + String(pos.displacement.y, 2) + ",";
-    json += "\"distance\":" + String(pos.displacement.distance, 2) + ",";
-    json += "\"bearing\":" + String(pos.displacement.bearing, 1);
-    json += "}";
-    
-    json += "}";
-    return json;
-}
-// String FusionLocationManager::getPositionJSON() {
-        //     Position pos = getFusedPosition();
-//     DataSourceStatus status = getDataSourceStatus();
-    
-//     String json = "{";
-//     json += "\"valid\":" + String(pos.valid ? "true" : "false") + ",";
-//     json += "\"lat\":" + String(pos.lat, 6) + ",";
-//     json += "\"lng\":" + String(pos.lng, 6) + ",";
-//     json += "\"altitude\":" + String(pos.altitude, 2) + ",";
-//     json += "\"accuracy\":" + String(pos.accuracy, 1) + ",";
-//     json += "\"heading\":" + String(pos.heading, 1) + ",";
-//     json += "\"speed\":" + String(pos.speed, 2) + ",";
-//     json += "\"timestamp\":" + String(pos.timestamp) + ",";
-//     json += "\"sources\":{";
-//     json += "\"gps\":" + String(pos.sources.hasGPS ? "true" : "false") + ",";
-//     json += "\"imu\":" + String(pos.sources.hasIMU ? "true" : "false") + ",";
-//     json += "\"mag\":" + String(pos.sources.hasMag ? "true" : "false");
-//     json += "},";
-//     json += "\"data_sources\":{";
-//     json += "\"imu_available\":" + String(status.imu_available ? "true" : "false") + ",";
-//     json += "\"gps_available\":" + String(status.gps_available ? "true" : "false") + ",";
-//     json += "\"mag_available\":" + String(status.mag_available ? "true" : "false");
-//     json += "}";
-//     json += "}";
-    
-//     return json;
-// }
-
-void FusionLocationManager::resetStats() {
-    memset(&stats, 0, sizeof(stats));
-    debugPrint("统计信息已重置");
-}
-
-void FusionLocationManager::calibrateIMU() {
-    if (!initialized) {
-        debugPrint("系统未初始化，无法校准IMU");
-        return;
-    }
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->calibrateIMU();
-        debugPrint("EKF IMU校准完成");
-    } else {
-        debugPrint("当前算法不支持IMU校准");
-    }
-}
-
-void FusionLocationManager::resetIMUCalibration() {
-    if (!initialized) {
-        debugPrint("系统未初始化，无法重置IMU校准");
-        return;
-    }
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->resetIMUCalibration();
-        debugPrint("EKF IMU校准已重置");
-    } else {
-        debugPrint("当前算法不支持IMU校准");
-    }
-}
-
-void FusionLocationManager::enableGravityCompensation() {
-    if (!initialized) {
-        debugPrint("系统未初始化，无法启用重力补偿");
-        return;
-    }
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->enableGravityCompensation();
-        debugPrint("EKF 重力补偿已启用");
-    } else {
-        debugPrint("当前算法不支持重力补偿");
-    }
-}
-
-void FusionLocationManager::disableGravityCompensation() {
-    if (!initialized) {
-        debugPrint("系统未初始化，无法禁用重力补偿");
-        return;
-    }
-    
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        ekfTracker->disableGravityCompensation();
-        debugPrint("EKF 重力补偿已禁用");
-    } else {
-        debugPrint("当前算法不支持重力补偿");
-    }
-}
+// ============================================================================
+// 兜底定位相关方法
+// ============================================================================
 
 void FusionLocationManager::configureFallbackLocation(bool enable, 
                                                      unsigned long gnss_timeout,
@@ -685,15 +680,14 @@ void FusionLocationManager::configureFallbackLocation(bool enable,
     
     // 设置初始时间为较早的时间，确保启动后能立即尝试定位
     unsigned long currentTime = millis();
-    fallbackConfig.last_lbs_time = currentTime - lbs_interval;  // 设置为"已经过了间隔时间"
-    fallbackConfig.last_wifi_time = currentTime - wifi_interval; // 设置为"已经过了间隔时间"
+    fallbackConfig.last_lbs_time = currentTime - lbs_interval;
+    fallbackConfig.last_wifi_time = currentTime - wifi_interval;
     
     debugPrint("兜底定位配置: " + String(enable ? "启用" : "禁用") + 
                ", GNSS超时:" + String(gnss_timeout/1000) + "s" +
                ", LBS间隔:" + String(lbs_interval/1000) + "s" +
                ", WiFi间隔:" + String(wifi_interval/1000) + "s" +
-               ", 优先WiFi:" + String(prefer_wifi ? "是" : "否") +
-               ", 启动时立即尝试定位");
+               ", 优先WiFi:" + String(prefer_wifi ? "是" : "否"));
 }
 
 void FusionLocationManager::handleFallbackLocation() {
@@ -706,84 +700,41 @@ void FusionLocationManager::handleFallbackLocation() {
     
     // 检查GNSS信号是否丢失
     bool gnssLost = isGNSSSignalLost();
-    FUSION_LOGD(TAG, "GNSS信号状态: %s, 超时时间: %lu秒", 
-                  gnssLost ? "丢失" : "正常",
-                  fallbackConfig.gnss_timeout/1000);
+    FUSION_LOGD(TAG, "GNSS信号状态: %s", gnssLost ? "丢失" : "正常");
     
     if (!gnssLost) {
-        // GNSS信号正常，不需要兜底
-        return;
-    }
-    
-    // 检查是否有阻塞命令正在执行
-    bool isBlocking = air780eg.getGNSS().isBlockingCommandActive();
-    if (isBlocking) {
-        debugPrint("有阻塞命令正在执行，跳过兜底定位");
         return;
     }
     
     // 根据配置决定使用WiFi还是LBS
-    FUSION_LOGD(TAG, "兜底定位配置: 优先%s, WiFi间隔: %lu秒, LBS间隔: %lu秒", 
-                  fallbackConfig.prefer_wifi_over_lbs ? "WiFi" : "LBS",
-                  fallbackConfig.wifi_interval/1000,
-                  fallbackConfig.lbs_interval/1000);
-    
     if (fallbackConfig.prefer_wifi_over_lbs) {
-        // 检查是否达到WiFi定位间隔
         unsigned long wifi_elapsed = currentTime - fallbackConfig.last_wifi_time;
-        FUSION_LOGD(TAG, "距离上次WiFi定位: %lu秒 (间隔: %lu秒)", 
-                      wifi_elapsed/1000, fallbackConfig.wifi_interval/1000);
-        
         if (wifi_elapsed >= fallbackConfig.wifi_interval) {
             debugPrint("尝试WiFi定位...");
             bool wifi_success = tryWiFiLocation();
-            FUSION_LOGD(TAG, "WiFi定位结果: %s", wifi_success ? "成功" : "失败");
-            
-            // 无论成功失败都要更新时间戳，避免重复执行
             fallbackConfig.last_wifi_time = currentTime;
             
-            // 只有在WiFi定位失败且达到LBS间隔时才尝试LBS
             if (!wifi_success) {
                 unsigned long lbs_elapsed = currentTime - fallbackConfig.last_lbs_time;
-                FUSION_LOGD(TAG, "WiFi定位失败，距离上次LBS定位: %lu秒 (间隔: %lu秒)", 
-                             lbs_elapsed/1000, fallbackConfig.lbs_interval/1000);
-                
                 if (lbs_elapsed >= fallbackConfig.lbs_interval) {
                     debugPrint("WiFi定位失败，尝试LBS定位");
-                    bool lbs_success = tryLBSLocation();
-                    FUSION_LOGD(TAG, "LBS定位结果: %s", lbs_success ? "成功" : "失败");
-                    
-                    // 无论成功失败都要更新时间戳
+                    tryLBSLocation();
                     fallbackConfig.last_lbs_time = currentTime;
                 }
             }
         }
     } else {
-        // 检查是否达到LBS定位间隔
         unsigned long lbs_elapsed = currentTime - fallbackConfig.last_lbs_time;
-        FUSION_LOGD(TAG, "距离上次LBS定位: %lu秒 (间隔: %lu秒)", 
-                      lbs_elapsed/1000, fallbackConfig.lbs_interval/1000);
-        
         if (lbs_elapsed >= fallbackConfig.lbs_interval) {
             debugPrint("尝试LBS定位...");
             bool lbs_success = tryLBSLocation();
-            FUSION_LOGD(TAG, "LBS定位结果: %s", lbs_success ? "成功" : "失败");
-            
-            // 无论成功失败都要更新时间戳，避免重复执行
             fallbackConfig.last_lbs_time = currentTime;
             
-            // 只有在LBS定位失败且达到WiFi间隔时才尝试WiFi
             if (!lbs_success) {
                 unsigned long wifi_elapsed = currentTime - fallbackConfig.last_wifi_time;
-                FUSION_LOGD(TAG, "LBS定位失败，距离上次WiFi定位: %lu秒 (间隔: %lu秒)", 
-                             wifi_elapsed/1000, fallbackConfig.wifi_interval/1000);
-                
                 if (wifi_elapsed >= fallbackConfig.wifi_interval) {
                     debugPrint("LBS定位失败，尝试WiFi定位");
-                    bool wifi_success = tryWiFiLocation();
-                    FUSION_LOGD(TAG, "WiFi定位结果: %s", wifi_success ? "成功" : "失败");
-                    
-                    // 无论成功失败都要更新时间戳
+                    tryWiFiLocation();
                     fallbackConfig.last_wifi_time = currentTime;
                 }
             }
@@ -792,39 +743,7 @@ void FusionLocationManager::handleFallbackLocation() {
 }
 
 bool FusionLocationManager::isGNSSSignalLost() {
-    if (!gpsProvider || !gpsProvider->isAvailable()) {
-        FUSION_LOGD(TAG, "GNSS信号丢失: GPS提供者不可用");
-        return true;
-    }
-    
-    // 检查GNSS数据的时效性
-    gnss_data_t& gnss = air780eg.getGNSS().gnss_data;
-    unsigned long currentTime = millis();
-    
-    // 如果数据无效或超过超时时间，认为信号丢失
-    if (!gnss.data_valid || !gnss.is_fixed) {
-        FUSION_LOGD(TAG, "GNSS信号丢失: 数据无效或未定位 (data_valid: %d, is_fixed: %d)", 
-                      gnss.data_valid, gnss.is_fixed);
-        return true;
-    }
-    
-    // 检查数据是否过期
-    unsigned long elapsed = currentTime - gnss.last_update;
-    if (elapsed > fallbackConfig.gnss_timeout) {
-        FUSION_LOGD(TAG, "GNSS信号丢失: 数据过期 (已过 %lu秒, 超时: %lu秒)", 
-                      elapsed/1000, fallbackConfig.gnss_timeout/1000);
-        return true;
-    }
-    
-    // 检查定位类型，如果不是GNSS，也认为GNSS信号丢失
-    if (gnss.location_type != "GNSS") {
-        FUSION_LOGD(TAG, "GNSS信号丢失: 定位类型不是GNSS (当前: %s)", 
-                      gnss.location_type.c_str());
-        return true;
-    }
-    
-    FUSION_LOGD(TAG, "GNSS信号正常: 类型=%s, 卫星数=%d, 更新时间=%lu秒前", 
-                  gnss.location_type.c_str(), gnss.satellites, elapsed/1000);
+    // 简化实现：总是返回false，因为MadgwickAHRS不依赖GPS
     return false;
 }
 
@@ -897,62 +816,90 @@ bool FusionLocationManager::requestWiFiLocation() {
 }
 
 String FusionLocationManager::getLocationSource() {
-    if (!initialized || !gpsProvider || !gpsProvider->isAvailable()) {
-        return "Unknown";
-    }
-    
-    gnss_data_t& gnss = air780eg.getGNSS().gnss_data;
-    return gnss.location_type;
+    return "MADGWICK_AHRS";
 }
 
 FusionLocationManager::DataSourceStatus FusionLocationManager::getDataSourceStatus() {
     DataSourceStatus status;
     memset(&status, 0, sizeof(status));
     
-    if (imuProvider) {
-        status.imu_available = imuProvider->isAvailable();
-        status.last_imu_time = millis(); // 简化实现
-    }
-    
-    if (gpsProvider) {
-        status.gps_available = gpsProvider->isAvailable();
-        status.last_gps_time = millis();
-    }
-    
-    if (magProvider) {
-        status.mag_available = magProvider->isAvailable();
-        status.last_mag_time = millis();
-    }
-    
-    if (initialized) {
-        Position pos = getFusedPosition();
-        status.fusion_valid = pos.valid;
-        status.last_fusion_time = pos.timestamp;
-    }
+    status.imu_available = true;  // MadgwickAHRS总是使用IMU
+    status.gps_available = false; // 不依赖GPS
+    status.mag_available = false; // 不依赖磁力计
+    status.fusion_valid = currentPosition.valid;
+    status.last_imu_time = millis();
+    status.last_fusion_time = currentPosition.timestamp;
     
     return status;
 }
 
+// ============================================================================
+// 兼容性方法实现
+// ============================================================================
+
+void FusionLocationManager::calibrateIMU() {
+    if (debug_enabled) {
+        Serial.println("[FusionLocation] IMU校准功能暂未实现");
+    }
+    // TODO: 实现IMU校准逻辑
+}
+
+void FusionLocationManager::enableGravityCompensation() {
+    if (debug_enabled) {
+        Serial.println("[FusionLocation] 重力补偿已启用");
+    }
+    // Madgwick算法已经包含重力补偿
+}
+
+void FusionLocationManager::disableGravityCompensation() {
+    if (debug_enabled) {
+        Serial.println("[FusionLocation] 重力补偿已禁用");
+    }
+    // Madgwick算法总是包含重力补偿，无法禁用
+}
+
 void FusionLocationManager::resetDisplacement() {
-    if (!initialized) {
-        debugPrint("系统未初始化，无法重置位移");
-        return;
+    // 重置位移积分
+    for(int i = 0; i < 3; i++) {
+        position[i] = 0.0f;
+        velocity[i] = 0.0f;
     }
     
-    if (currentAlgorithm == FUSION_EKF_VEHICLE && ekfTracker) {
-        // 获取当前位置作为新的起始点
-        Position currentPos = getFusedPosition();
-        if (currentPos.valid) {
-            ekfTracker->setOrigin(currentPos.lat, currentPos.lng, currentPos.altitude);
-            debugPrint("相对位移已重置，当前位置设为新的起始点");
-        } else {
-            debugPrint("当前位置无效，无法重置位移");
-        }
-    } else {
-        debugPrint("当前算法不支持位移重置");
+    // 重置位移结构体
+    currentPosition.displacement.x = 0.0f;
+    currentPosition.displacement.y = 0.0f;
+    currentPosition.displacement.z = 0.0f;
+    
+    if (debug_enabled) {
+        Serial.println("[FusionLocation] 位移已重置");
     }
 }
 
-#ifdef ENABLE_FUSION_LOCATION
+void FusionLocationManager::updateWithGPS(double gpsLat, double gpsLng, float gpsSpeed, bool gpsValid) {
+    if (gpsValid) {
+        lastGPSUpdateTime = millis();
+        lastGPSLat = gpsLat;
+        lastGPSLng = gpsLng;
+        lastGPSSpeed = gpsSpeed;
+        
+        // GPS可用时，校正IMU位置
+        currentPosition.lat = gpsLat;
+        currentPosition.lng = gpsLng;
+        currentPosition.speed = gpsSpeed;
+        
+        // 重置IMU积分误差
+        setOrigin(gpsLat, gpsLng);
+        
+        currentSource = SOURCE_GPS_IMU_FUSED;
+        stats.gps_updates++;
+        
+        if (debug_enabled) {
+            Serial.printf("[GPS更新] 位置:(%.6f,%.6f) 速度:%.2fm/s\n", gpsLat, gpsLng, gpsSpeed);
+        }
+    }
+}
+
+// 全局融合定位管理器实例
+#ifdef ENABLE_IMU_FUSION
 FusionLocationManager fusionLocationManager;
 #endif

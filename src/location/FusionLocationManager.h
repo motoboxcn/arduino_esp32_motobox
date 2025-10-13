@@ -21,6 +21,19 @@ enum FusionAlgorithm {
     FUSION_MADGWICK_AHRS     // MadgwickAHRS算法
 };
 
+// 定位来源类型
+enum LocationSource {
+    SOURCE_GPS_ONLY,      // 仅GPS
+    SOURCE_GPS_IMU_FUSED, // GPS+IMU融合
+    SOURCE_IMU_DEAD_RECKONING // 纯惯导（GPS丢失）
+};
+
+// 位移结构体
+struct Displacement {
+    float x, y, z;  // 三轴位移 (米)
+    Displacement() : x(0), y(0), z(0) {}
+};
+
 // 摩托车轨迹点数据结构
 struct MotorcycleTrajectoryPoint {
     double lat, lng;        // 经纬度
@@ -32,11 +45,16 @@ struct MotorcycleTrajectoryPoint {
     float leanAngle;        // 倾斜角 (度)
     uint32_t timestamp;     // 时间戳
     bool valid;             // 数据有效性
+    float accuracy;         // 位置精度 (米)
+    Displacement displacement; // 位移信息
     
     MotorcycleTrajectoryPoint() : lat(0), lng(0), altitude(0), speed(0), 
                                  heading(0), pitch(0), roll(0), leanAngle(0), 
-                                 timestamp(0), valid(false) {}
+                                 timestamp(0), valid(false), accuracy(5.0f) {}
 };
+
+// 兼容性别名
+typedef MotorcycleTrajectoryPoint Position;
 
 // 摩托车运动状态
 struct MotorcycleMotionState {
@@ -67,7 +85,7 @@ private:
     static const char* TAG;
     
     // Madgwick AHRS算法
-    MadgwickAHRS ahrs;
+    Madgwick ahrs;
     
     // 配置参数
     bool initialized;
@@ -96,6 +114,13 @@ private:
     bool isStationary;
     uint32_t stationaryStartTime;
     static const uint32_t STATIONARY_THRESHOLD = 1000; // 1秒
+    
+    // GPS/IMU融合状态
+    LocationSource currentSource;
+    unsigned long lastGPSUpdateTime;
+    double lastGPSLat, lastGPSLng;
+    float lastGPSSpeed;
+    static const unsigned long FUSION_GPS_TIMEOUT = 5000; // GPS超时5秒
     
     // 轨迹记录
     bool isRecording;
@@ -189,6 +214,12 @@ public:
      * @return MotorcycleTrajectoryPoint结构体，包含位置、姿态、运动信息
      */
     MotorcycleTrajectoryPoint getCurrentPosition();
+    
+    /**
+     * @brief 获取融合位置（兼容性方法）
+     * @return Position结构体，包含位置信息
+     */
+    Position getFusedPosition();
     
     /**
      * @brief 获取当前运动状态
@@ -347,10 +378,39 @@ public:
     };
     
     DataSourceStatus getDataSourceStatus();
+    
+    /**
+     * @brief 校准IMU（兼容性方法）
+     */
+    void calibrateIMU();
+    
+    /**
+     * @brief 启用重力补偿（兼容性方法）
+     */
+    void enableGravityCompensation();
+    
+    /**
+     * @brief 禁用重力补偿（兼容性方法）
+     */
+    void disableGravityCompensation();
+    
+    /**
+     * @brief 重置位移（兼容性方法）
+     */
+    void resetDisplacement();
+    
+    /**
+     * @brief 使用GPS数据更新融合定位系统
+     * @param gpsLat GPS纬度
+     * @param gpsLng GPS经度
+     * @param gpsSpeed GPS速度 (m/s)
+     * @param gpsValid GPS数据是否有效
+     */
+    void updateWithGPS(double gpsLat, double gpsLng, float gpsSpeed, bool gpsValid);
 };
 
 // 全局融合定位管理器实例
-#ifdef ENABLE_FUSION_LOCATION
+#ifdef ENABLE_IMU_FUSION
 extern FusionLocationManager fusionLocationManager;
 #endif
 
