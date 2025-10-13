@@ -362,13 +362,22 @@ void IMU::loop()
     imu_data.accel_y = -temp;
 #endif
 
-    // 使用加速度计计算姿态角
+    // 注释掉IMU层的姿态解算，让Fusion层处理
+    // 这样可以避免双重滤波，提高精度
+    // 
+    // 如果需要简单的姿态角用于调试，可以保留：
+    // float roll_acc = atan2(imu_data.accel_y, imu_data.accel_z) * 180 / M_PI;
+    // float pitch_acc = atan2(-imu_data.accel_x, sqrt(imu_data.accel_y * imu_data.accel_y + imu_data.accel_z * imu_data.accel_z)) * 180 / M_PI;
+    // imu_data.roll = ALPHA * (imu_data.roll + imu_data.gyro_x * dt) + (1.0 - ALPHA) * roll_acc;
+    // imu_data.pitch = ALPHA * (imu_data.pitch + imu_data.gyro_y * dt) + (1.0 - ALPHA) * pitch_acc;
+    
+    // 保持简单的互补滤波用于基础姿态估计（仅用于调试和兼容性）
     float roll_acc = atan2(imu_data.accel_y, imu_data.accel_z) * 180 / M_PI;
     float pitch_acc = atan2(-imu_data.accel_x, sqrt(imu_data.accel_y * imu_data.accel_y + imu_data.accel_z * imu_data.accel_z)) * 180 / M_PI;
-
-    // 使用陀螺仪数据和互补滤波更新姿态角
-    imu_data.roll = ALPHA * (imu_data.roll + imu_data.gyro_x * dt) + (1.0 - ALPHA) * roll_acc;
-    imu_data.pitch = ALPHA * (imu_data.pitch + imu_data.gyro_y * dt) + (1.0 - ALPHA) * pitch_acc;
+    
+    // 使用较低的ALPHA值，减少对Fusion层的影响
+    imu_data.roll = 0.5f * (imu_data.roll + imu_data.gyro_x * IMU_DT) + 0.5f * roll_acc;
+    imu_data.pitch = 0.5f * (imu_data.pitch + imu_data.gyro_y * IMU_DT) + 0.5f * pitch_acc;
 
     imu_data.temperature = qmi.getTemperature_C();
 

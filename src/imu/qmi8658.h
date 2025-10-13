@@ -11,7 +11,7 @@
 #include "utils/I2CManager.h"
 
 #define ALPHA 0.98 // 互补滤波的系数，范围在0到1之间
-#define dt 0.01    // 时间间隔，单位是秒（假设采样率为100Hz）
+#define IMU_DT 0.01    // 时间间隔，单位是秒（假设采样率为100Hz）
 
 // 运动检测相关参数
 #define MOTION_DETECTION_THRESHOLD_DEFAULT 0.0035   // 0.05 适合震动检测，, 静止的量级0.001~0.003

@@ -24,6 +24,11 @@ FusionLocationManager::FusionLocationManager()
       originLat(0), originLng(0), hasOrigin(false),
       isStationary(false), stationaryStartTime(0),
       currentSource(SOURCE_GPS_ONLY), lastGPSUpdateTime(0), lastGPSLat(0.0), lastGPSLng(0.0), lastGPSSpeed(0.0f),
+      use_kalman_filter(true),  // 默认启用卡尔曼滤波
+      kalman_roll(0), kalman_pitch(0), kalman_yaw(0),
+      kalman_roll_rate(0), kalman_pitch_rate(0), kalman_yaw_rate(0),
+      kalman_roll_var(0.1f), kalman_pitch_var(0.1f), kalman_yaw_var(0.1f),
+      process_noise(0.1f), measurement_noise(0.05f),
       isRecording(false), totalDistance(0), maxSpeed(0), maxLeanAngle(0),
       accelerationThreshold(1.0f), brakingThreshold(-1.0f), leanThreshold(0.175f),
       wheelieThreshold(0.35f), stoppieThreshold(-0.35f), driftThreshold(3.0f) {
@@ -189,13 +194,35 @@ void FusionLocationManager::updateAHRS() {
     stats.imu_updates++;
     stats.total_updates++;
     
-    // 获取姿态角
-    currentPosition.roll = ahrs.getRoll();
-    currentPosition.pitch = ahrs.getPitch();
-    currentPosition.heading = ahrs.getYaw();
+    // 获取Madgwick算法输出的原始姿态角
+    float raw_roll = ahrs.getRoll();
+    float raw_pitch = ahrs.getPitch();
+    float raw_yaw = ahrs.getYaw();
+    
+    // 获取角速度（转换为度/秒）
+    float roll_rate = gx * RAD_TO_DEG;
+    float pitch_rate = gy * RAD_TO_DEG;
+    float yaw_rate = gz * RAD_TO_DEG;
+    
+    // 根据配置选择是否使用卡尔曼滤波器
+    float dt = (millis() - last_update_time) / 1000.0f;
+    if (use_kalman_filter && dt > 0.001f && dt < 1.0f) {
+        updateKalmanFilter(raw_roll, raw_pitch, raw_yaw, roll_rate, pitch_rate, yaw_rate, dt);
+        
+        // 使用卡尔曼滤波后的结果
+        currentPosition.roll = kalman_roll;
+        currentPosition.pitch = kalman_pitch;
+        currentPosition.heading = kalman_yaw;
+    } else {
+        // 直接使用Madgwick算法的结果
+        currentPosition.roll = raw_roll;
+        currentPosition.pitch = raw_pitch;
+        currentPosition.heading = raw_yaw;
+    }
     
     if (debug_enabled) {
-        Serial.printf("[AHRS] Roll: %.1f°, Pitch: %.1f°, Yaw: %.1f°\n",
+        Serial.printf("[AHRS] Raw(R%.1f°P%.1f°Y%.1f°) -> Kalman(R%.1f°P%.1f°Y%.1f°)\n",
+                     raw_roll, raw_pitch, raw_yaw,
                      currentPosition.roll, currentPosition.pitch, currentPosition.heading);
     }
 #endif
@@ -235,9 +262,16 @@ void FusionLocationManager::updatePosition() {
     linearAccel[1] = ay_world;
     linearAccel[2] = az_world - 9.8f;
     
-    // 速度积分
+    // 速度积分（添加约束和滤波）
     for(int i = 0; i < 3; i++) {
         velocity[i] += linearAccel[i] * deltaTime;
+        
+        // 速度约束：限制最大速度（摩托车最大速度约50m/s）
+        if (velocity[i] > 50.0f) velocity[i] = 50.0f;
+        if (velocity[i] < -50.0f) velocity[i] = -50.0f;
+        
+        // 简单的低通滤波减少噪声
+        velocity[i] *= 0.95f;
     }
     
     // 位置积分
@@ -245,8 +279,22 @@ void FusionLocationManager::updatePosition() {
         position[i] += velocity[i] * deltaTime;
     }
     
-    // 计算速度大小
+    // 计算速度大小（只考虑水平速度）
     currentPosition.speed = sqrt(velocity[0]*velocity[0] + velocity[1]*velocity[1]);
+    
+    // 速度合理性检查
+    if (currentPosition.speed > 100.0f) {
+        // 速度异常，重置积分
+        for(int i = 0; i < 3; i++) {
+            velocity[i] *= 0.1f;
+            position[i] *= 0.1f;
+        }
+        currentPosition.speed = sqrt(velocity[0]*velocity[0] + velocity[1]*velocity[1]);
+        
+        if (debug_enabled) {
+            Serial.println("[Position] 速度异常，重置积分");
+        }
+    }
     
     // 更新位移信息
     currentPosition.displacement.x = position[0];
@@ -896,6 +944,59 @@ void FusionLocationManager::updateWithGPS(double gpsLat, double gpsLng, float gp
         if (debug_enabled) {
             Serial.printf("[GPS更新] 位置:(%.6f,%.6f) 速度:%.2fm/s\n", gpsLat, gpsLng, gpsSpeed);
         }
+    }
+}
+
+void FusionLocationManager::updateKalmanFilter(float roll_measure, float pitch_measure, float yaw_measure,
+                                              float roll_rate, float pitch_rate, float yaw_rate, float dt) {
+    // 简化的卡尔曼滤波器实现
+    // 状态向量：[角度, 角速度]
+    // 测量向量：[角度]
+    
+    // 预测步骤
+    kalman_roll += kalman_roll_rate * dt;
+    kalman_pitch += kalman_pitch_rate * dt;
+    kalman_yaw += kalman_yaw_rate * dt;
+    
+    // 更新角速度
+    kalman_roll_rate = roll_rate;
+    kalman_pitch_rate = pitch_rate;
+    kalman_yaw_rate = yaw_rate;
+    
+    // 增加过程噪声
+    kalman_roll_var += process_noise * dt;
+    kalman_pitch_var += process_noise * dt;
+    kalman_yaw_var += process_noise * dt;
+    
+    // 更新步骤
+    float kalman_gain_roll = kalman_roll_var / (kalman_roll_var + measurement_noise);
+    float kalman_gain_pitch = kalman_pitch_var / (kalman_pitch_var + measurement_noise);
+    float kalman_gain_yaw = kalman_yaw_var / (kalman_yaw_var + measurement_noise);
+    
+    // 融合测量值
+    kalman_roll += kalman_gain_roll * (roll_measure - kalman_roll);
+    kalman_pitch += kalman_gain_pitch * (pitch_measure - kalman_pitch);
+    kalman_yaw += kalman_gain_yaw * (yaw_measure - kalman_yaw);
+    
+    // 更新协方差
+    kalman_roll_var *= (1.0f - kalman_gain_roll);
+    kalman_pitch_var *= (1.0f - kalman_gain_pitch);
+    kalman_yaw_var *= (1.0f - kalman_gain_yaw);
+    
+    // 角度归一化
+    while (kalman_roll > 180.0f) kalman_roll -= 360.0f;
+    while (kalman_roll < -180.0f) kalman_roll += 360.0f;
+    while (kalman_pitch > 180.0f) kalman_pitch -= 360.0f;
+    while (kalman_pitch < -180.0f) kalman_pitch += 360.0f;
+    while (kalman_yaw > 360.0f) kalman_yaw -= 360.0f;
+    while (kalman_yaw < 0.0f) kalman_yaw += 360.0f;
+}
+
+void FusionLocationManager::setKalmanFilterEnabled(bool enabled) {
+    use_kalman_filter = enabled;
+    
+    if (debug_enabled) {
+        Serial.printf("[FusionLocation] 卡尔曼滤波器: %s\n", enabled ? "启用" : "禁用");
     }
 }
 

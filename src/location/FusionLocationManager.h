@@ -122,6 +122,13 @@ private:
     float lastGPSSpeed;
     static const unsigned long FUSION_GPS_TIMEOUT = 5000; // GPS超时5秒
     
+    // 简化的卡尔曼滤波器状态
+    bool use_kalman_filter;  // 是否使用卡尔曼滤波
+    float kalman_roll, kalman_pitch, kalman_yaw;
+    float kalman_roll_rate, kalman_pitch_rate, kalman_yaw_rate;
+    float kalman_roll_var, kalman_pitch_var, kalman_yaw_var;
+    float process_noise, measurement_noise;
+    
     // 轨迹记录
     bool isRecording;
     float totalDistance;
@@ -407,6 +414,25 @@ public:
      * @param gpsValid GPS数据是否有效
      */
     void updateWithGPS(double gpsLat, double gpsLng, float gpsSpeed, bool gpsValid);
+    
+    /**
+     * @brief 简化的卡尔曼滤波器更新
+     * @param roll_measure 测量的横滚角
+     * @param pitch_measure 测量的俯仰角
+     * @param yaw_measure 测量的偏航角
+     * @param roll_rate 横滚角速度
+     * @param pitch_rate 俯仰角速度
+     * @param yaw_rate 偏航角速度
+     * @param dt 时间间隔
+     */
+    void updateKalmanFilter(float roll_measure, float pitch_measure, float yaw_measure,
+                           float roll_rate, float pitch_rate, float yaw_rate, float dt);
+    
+    /**
+     * @brief 设置是否使用卡尔曼滤波器
+     * @param enabled true: 启用卡尔曼滤波, false: 直接使用Madgwick结果
+     */
+    void setKalmanFilterEnabled(bool enabled);
 };
 
 // 全局融合定位管理器实例

@@ -99,7 +99,7 @@
 
 // MadgwickAHRS算法配置
 #define MADGWICK_SAMPLE_RATE             100.0f  // 采样率（Hz）
-#define MADGWICK_BETA                    0.05f   // 降低增益，减少噪声影响
+#define MADGWICK_BETA                    0.1f    // 提高增益，改善响应速度
 
 // 摩托车运动检测阈值
 #define MOTO_ACCELERATION_THRESHOLD      1.0f    // 加速检测阈值（m/s²）
