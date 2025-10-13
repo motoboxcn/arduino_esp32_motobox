@@ -1000,6 +1000,44 @@ void FusionLocationManager::setKalmanFilterEnabled(bool enabled) {
     }
 }
 
+void FusionLocationManager::getRawMadgwickOutput(float& roll, float& pitch, float& yaw) {
+#ifdef ENABLE_IMU
+    roll = ahrs.getRoll();
+    pitch = ahrs.getPitch();
+    yaw = ahrs.getYaw();
+#else
+    roll = 0;
+    pitch = 0;
+    yaw = 0;
+#endif
+}
+
+void FusionLocationManager::getKalmanOutput(float& roll, float& pitch, float& yaw) {
+#ifdef ENABLE_IMU
+    roll = kalman_roll;
+    pitch = kalman_pitch;
+    yaw = kalman_yaw;
+#else
+    roll = 0;
+    pitch = 0;
+    yaw = 0;
+#endif
+}
+
+void FusionLocationManager::getIntegrationData(float pos[3], float vel[3]) {
+#ifdef ENABLE_IMU
+    for (int i = 0; i < 3; i++) {
+        pos[i] = position[i];
+        vel[i] = velocity[i];
+    }
+#else
+    for (int i = 0; i < 3; i++) {
+        pos[i] = 0;
+        vel[i] = 0;
+    }
+#endif
+}
+
 // 全局融合定位管理器实例
 #ifdef ENABLE_IMU_FUSION
 FusionLocationManager fusionLocationManager;

@@ -58,6 +58,8 @@ BLEManager::BLEManager()
     , pGPSCharacteristic(nullptr)
     , pBatteryCharacteristic(nullptr)
     , pIMUCharacteristic(nullptr)
+    , pFusionCharacteristic(nullptr)
+    , pSystemCharacteristic(nullptr)
     , serverCallbacks(nullptr)
     , charCallbacks(nullptr)
     , isInitialized(false)
@@ -70,6 +72,8 @@ BLEManager::BLEManager()
     memset(&lastGPSData, 0, sizeof(lastGPSData));
     memset(&lastBatteryData, 0, sizeof(lastBatteryData));
     memset(&lastIMUData, 0, sizeof(lastIMUData));
+    memset(&lastFusionData, 0, sizeof(lastFusionData));
+    memset(&lastSystemStatus, 0, sizeof(lastSystemStatus));
 }
 
 BLEManager::~BLEManager() {
@@ -209,11 +213,27 @@ void BLEManager::createCharacteristics() {
     pIMUCharacteristic->setCallbacks(charCallbacks);
     pIMUCharacteristic->addDescriptor(new BLE2902());
     
+    // 创建融合定位特征值
+    pFusionCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_FUSION_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pFusionCharacteristic->setCallbacks(charCallbacks);
+    pFusionCharacteristic->addDescriptor(new BLE2902());
+    
+    // 创建系统状态特征值
+    pSystemCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_SYSTEM_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pSystemCharacteristic->setCallbacks(charCallbacks);
+    pSystemCharacteristic->addDescriptor(new BLE2902());
+    
     // 启动服务
     pService->start();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.println("[BLE] ✅ BLE特征值创建成功");
+    Serial.println("[BLE] ✅ BLE特征值创建成功（含融合定位和系统状态）");
     #endif
 }
 
@@ -338,6 +358,53 @@ void BLEManager::updateIMUData(const BLEIMUData& data) {
     #endif
 }
 
+void BLEManager::updateFusionData(const BLEFusionData& data) {
+    if (!isInitialized || !pFusionCharacteristic) {
+        return;
+    }
+    
+    // 检查数据是否有变化（只检查关键字段以减少开销）
+    if (lastFusionData.lat == data.lat && 
+        lastFusionData.lng == data.lng && 
+        lastFusionData.speed == data.speed &&
+        lastFusionData.timestamp == data.timestamp) {
+        return;
+    }
+    
+    lastFusionData = data;
+    
+    String jsonData = fusionDataToJSON(data);
+    pFusionCharacteristic->setValue(jsonData.c_str());
+    pFusionCharacteristic->notify();
+    
+    #ifdef BLE_DEBUG_ENABLED
+    Serial.printf("[BLE] 融合数据已更新: 位置(%.6f,%.6f) 速度%.1fm/s\n", 
+                 data.lat, data.lng, data.speed);
+    #endif
+}
+
+void BLEManager::updateSystemStatus(const BLESystemStatus& data) {
+    if (!isInitialized || !pSystemCharacteristic) {
+        return;
+    }
+    
+    // 检查数据是否有变化
+    if (memcmp(&data, &lastSystemStatus, sizeof(BLESystemStatus)) == 0) {
+        return;
+    }
+    
+    lastSystemStatus = data;
+    
+    String jsonData = systemStatusToJSON(data);
+    pSystemCharacteristic->setValue(jsonData.c_str());
+    pSystemCharacteristic->notify();
+    
+    #ifdef BLE_DEBUG_ENABLED
+    Serial.printf("[BLE] 系统状态已更新: GPS:%d IMU:%d BAT:%d\n",
+                 data.gps_status, data.imu_status, data.battery_status);
+    #endif
+}
+
 String BLEManager::gpsDataToJSON(const BLEGPSData& data) {
     StaticJsonDocument<256> doc;
     doc["lat"] = data.latitude;
@@ -376,6 +443,100 @@ String BLEManager::imuDataToJSON(const BLEIMUData& data) {
     doc["gyro"]["z"] = data.gyro_z;
     doc["valid"] = data.valid;
     doc["ts"] = millis();
+    
+    return doc.as<String>();
+}
+
+String BLEManager::fusionDataToJSON(const BLEFusionData& data) {
+    StaticJsonDocument<512> doc;
+    
+    // 融合位置
+    JsonArray pos = doc.createNestedArray("pos");
+    pos.add(data.lat);
+    pos.add(data.lng);
+    pos.add(data.altitude);
+    
+    // 运动状态
+    JsonArray mov = doc.createNestedArray("mov");
+    mov.add(data.speed);
+    mov.add(data.heading);
+    
+    // Madgwick原始姿态
+    JsonArray raw = doc.createNestedArray("raw");
+    raw.add(data.raw_roll);
+    raw.add(data.raw_pitch);
+    raw.add(data.raw_yaw);
+    
+    // Kalman滤波姿态
+    JsonArray kal = doc.createNestedArray("kal");
+    kal.add(data.kalman_roll);
+    kal.add(data.kalman_pitch);
+    kal.add(data.kalman_yaw);
+    
+    // 倾斜数据
+    JsonArray lean = doc.createNestedArray("lean");
+    lean.add(data.lean_angle);
+    lean.add(data.lean_rate);
+    
+    // 加速度
+    JsonArray acc = doc.createNestedArray("acc");
+    acc.add(data.forward_accel);
+    acc.add(data.lateral_accel);
+    
+    // 积分位置
+    JsonArray ipos = doc.createNestedArray("ipos");
+    ipos.add(data.pos_x);
+    ipos.add(data.pos_y);
+    ipos.add(data.pos_z);
+    
+    // 积分速度
+    JsonArray ivel = doc.createNestedArray("ivel");
+    ivel.add(data.vel_x);
+    ivel.add(data.vel_y);
+    ivel.add(data.vel_z);
+    
+    // 状态标志
+    doc["src"] = data.source;
+    doc["kf"] = data.kalman_enabled;
+    doc["v"] = data.valid;
+    doc["ts"] = data.timestamp;
+    
+    return doc.as<String>();
+}
+
+String BLEManager::systemStatusToJSON(const BLESystemStatus& data) {
+    StaticJsonDocument<384> doc;
+    
+    // 运行状态
+    doc["mode"] = data.mode;
+    doc["up"] = data.uptime;
+    doc["loop"] = data.loop_count;
+    
+    // 模块状态
+    JsonObject st = doc.createNestedObject("st");
+    st["gps"] = data.gps_status;
+    st["imu"] = data.imu_status;
+    st["bat"] = data.battery_status;
+    st["fus"] = data.fusion_status;
+    
+    // 内存状态
+    JsonObject mem = doc.createNestedObject("mem");
+    mem["free"] = data.free_heap;
+    mem["kb"] = data.free_heap_kb;
+    
+    // 统计数据
+    JsonObject stats = doc.createNestedObject("stats");
+    stats["dist"] = data.total_distance;
+    stats["maxspd"] = data.max_speed;
+    stats["maxln"] = data.max_lean_angle;
+    stats["gps"] = data.gps_updates;
+    stats["imu"] = data.imu_updates;
+    stats["fus"] = data.fusion_updates;
+    
+    // 错误信息
+    doc["err"] = data.error_code;
+    doc["msg"] = String(data.error_msg);
+    doc["ts"] = data.timestamp;
     
     return doc.as<String>();
 }

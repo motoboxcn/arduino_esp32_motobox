@@ -134,7 +134,11 @@
 #define BLE_CHAR_GPS_UUID                 "12345678-1234-1234-1234-123456789ABD"  // GPS位置特征UUID
 #define BLE_CHAR_BATTERY_UUID             "12345678-1234-1234-1234-123456789ABE"  // 电池电量特征UUID
 #define BLE_CHAR_IMU_UUID                 "12345678-1234-1234-1234-123456789ABF"  // IMU倾角特征UUID
+#define BLE_CHAR_FUSION_UUID              "12345678-1234-1234-1234-123456789AC0"  // 融合定位特征UUID
+#define BLE_CHAR_SYSTEM_UUID              "12345678-1234-1234-1234-123456789AC1"  // 系统状态特征UUID
 #define BLE_UPDATE_INTERVAL               1000                // BLE数据更新间隔（毫秒）
+#define BLE_FUSION_UPDATE_INTERVAL        50                  // 融合数据更新间隔（毫秒，20Hz）
+#define BLE_SYSTEM_UPDATE_INTERVAL        2000                // 系统状态更新间隔（毫秒）
 #define BLE_DEBUG_ENABLED                 false               // BLE调试输出
 #endif
 

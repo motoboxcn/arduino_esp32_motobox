@@ -218,6 +218,14 @@ void setup()
 #endif
   //================ MadgwickAHRS融合定位初始化结束 ================
 
+#ifdef ENABLE_BLE
+  // BLE数据提供者设置融合定位管理器
+  #ifdef ENABLE_IMU_FUSION
+    bleDataProvider.setFusionManager(&fusionLocationManager);
+    Serial.println("[BLE] 融合定位管理器已设置到BLE数据提供者");
+  #endif
+#endif
+
   // 创建任务
   xTaskCreate(taskSystem, "TaskSystem", 1024 * 15, NULL, 1, NULL);
   xTaskCreate(taskDataProcessing, "TaskData", 1024 * 15, NULL, 2, NULL);
@@ -284,6 +292,16 @@ void loop()
     bleManager.updateGPSData(bleDataProvider.getGPSData());
     bleManager.updateBatteryData(bleDataProvider.getBatteryData());
     bleManager.updateIMUData(bleDataProvider.getIMUData());
+    
+    // 更新融合定位数据
+    if (bleDataProvider.isFusionDataValid()) {
+      bleManager.updateFusionData(bleDataProvider.getFusionData());
+    }
+    
+    // 更新系统状态数据
+    if (bleDataProvider.isSystemStatusValid()) {
+      bleManager.updateSystemStatus(bleDataProvider.getSystemStatus());
+    }
   }
   
   // BLE管理器更新

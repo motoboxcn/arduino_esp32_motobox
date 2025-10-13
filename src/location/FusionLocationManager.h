@@ -433,6 +433,65 @@ public:
      * @param enabled true: 启用卡尔曼滤波, false: 直接使用Madgwick结果
      */
     void setKalmanFilterEnabled(bool enabled);
+    
+    /**
+     * @brief 获取原始Madgwick输出（debug用）
+     * @param roll 横滚角输出
+     * @param pitch 俯仰角输出
+     * @param yaw 偏航角输出
+     */
+    void getRawMadgwickOutput(float& roll, float& pitch, float& yaw);
+    
+    /**
+     * @brief 获取卡尔曼滤波输出
+     * @param roll 横滚角输出
+     * @param pitch 俯仰角输出
+     * @param yaw 偏航角输出
+     */
+    void getKalmanOutput(float& roll, float& pitch, float& yaw);
+    
+    /**
+     * @brief 获取位置速度积分数据
+     * @param pos 位置积分数组[x, y, z]
+     * @param vel 速度积分数组[x, y, z]
+     */
+    void getIntegrationData(float pos[3], float vel[3]);
+    
+    /**
+     * @brief 获取当前定位来源
+     * @return 定位来源枚举值
+     */
+    LocationSource getCurrentSource() const { return currentSource; }
+    
+    /**
+     * @brief 获取卡尔曼滤波状态
+     * @return true:启用, false:禁用
+     */
+    bool isKalmanEnabled() const { return use_kalman_filter; }
+    
+    /**
+     * @brief 获取GPS更新计数
+     * @return GPS更新次数
+     */
+    uint32_t getGPSUpdateCount() const { return stats.gps_updates; }
+    
+    /**
+     * @brief 获取IMU更新计数
+     * @return IMU更新次数
+     */
+    uint32_t getIMUUpdateCount() const { return stats.imu_updates; }
+    
+    /**
+     * @brief 获取融合更新计数
+     * @return 融合更新次数
+     */
+    uint32_t getFusionUpdateCount() const { return stats.fusion_updates; }
+    
+    /**
+     * @brief 获取当前运动状态
+     * @return MotorcycleMotionState结构体
+     */
+    MotorcycleMotionState getCurrentMotionState() { return currentMotionState; }
 };
 
 // 全局融合定位管理器实例
