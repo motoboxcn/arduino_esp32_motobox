@@ -11,8 +11,8 @@
 #include <BLE2902.h>
 #include <ArduinoJson.h>
 
-// 前向声明
-struct device_state_t;
+// 包含BLE类型定义
+#include "BLETypes.h"
 
 /**
  * @brief MotoBox BLE服务器回调类
@@ -68,7 +68,7 @@ private:
     // 内部方法
     void createService();
     void createCharacteristics();
-    String telemetryDataToJSON(const device_state_t& deviceState);
+    String telemetryDataToJSON(const ble_device_state_t& deviceState);
 
 public:
     BLEManager();
@@ -93,7 +93,7 @@ public:
     void stopAdvertising();
     
     // 数据更新
-    void updateTelemetryData(const device_state_t& deviceState);
+    void updateTelemetryData(const ble_device_state_t& deviceState);
     
     // 调试和状态
     void setDebug(bool enable);

@@ -6,8 +6,8 @@
 
 #ifdef ENABLE_BLE
 
-// 前向声明
-struct device_state_t;
+// 包含BLE类型定义
+#include "BLETypes.h"
 
 /**
  * @brief 简化的BLE数据提供者类
@@ -18,7 +18,8 @@ private:
     static const char* TAG;
     
     // 数据源
-    const device_state_t* deviceState;
+    const ble_device_state_t* deviceState;
+    ble_device_state_t convertedState;  // 转换后的状态
     
     // 更新控制
     unsigned long lastUpdateTime;
@@ -33,10 +34,11 @@ public:
     void update();
     
     // 数据源设置
-    void setDeviceState(const device_state_t* state);
+    void setDeviceState(const ble_device_state_t* state);
+    void setDeviceStateFromGlobal();  // 从全局device_state转换
     
     // 数据获取
-    const device_state_t* getDeviceState() const { return deviceState; }
+    const ble_device_state_t* getDeviceState() const { return deviceState; }
     bool isDataValid() const { return dataValid; }
     
     // 调试

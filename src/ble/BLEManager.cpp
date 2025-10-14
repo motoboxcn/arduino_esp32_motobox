@@ -1,9 +1,8 @@
-#include "BLEManager_Simple.h"
+#include "BLEManager.h"
 
 #ifdef ENABLE_BLE
 
 #include "utils/DebugUtils.h"
-#include "device.h"  // 包含device_state_t定义
 
 const char* BLEManager::TAG = "BLEManager";
 
@@ -255,7 +254,7 @@ void BLEManager::update() {
     // 目前数据更新通过外部调用updateTelemetryData方法实现
 }
 
-void BLEManager::updateTelemetryData(const device_state_t& deviceState) {
+void BLEManager::updateTelemetryData(const ble_device_state_t& deviceState) {
     if (!isInitialized || !pTelemetryCharacteristic) {
         return;
     }
@@ -279,82 +278,82 @@ void BLEManager::updateTelemetryData(const device_state_t& deviceState) {
     #endif
 }
 
-String BLEManager::telemetryDataToJSON(const device_state_t& deviceState) {
+String BLEManager::telemetryDataToJSON(const ble_device_state_t& deviceState) {
     StaticJsonDocument<2048> doc;
     
     // 设备基础信息
     doc["device_id"] = deviceState.device_id;
     doc["timestamp"] = millis();
-    doc["firmware"] = deviceState.device_firmware_version;
-    doc["hardware"] = deviceState.device_hardware_version;
+    doc["firmware"] = deviceState.firmware;
+    doc["hardware"] = deviceState.hardware;
     doc["power_mode"] = deviceState.power_mode;
     
     // 位置数据
-    if (deviceState.telemetry.location.valid) {
+    if (deviceState.location.valid) {
         JsonObject location = doc.createNestedObject("location");
-        location["lat"] = deviceState.telemetry.location.lat;
-        location["lng"] = deviceState.telemetry.location.lng;
-        location["alt"] = deviceState.telemetry.location.altitude;
-        location["speed"] = deviceState.telemetry.location.speed;
-        location["course"] = deviceState.telemetry.location.heading;
-        location["satellites"] = deviceState.telemetry.location.satellites;
-        location["hdop"] = deviceState.telemetry.location.hdop;
-        location["timestamp"] = deviceState.telemetry.location.timestamp;
+        location["lat"] = deviceState.location.lat;
+        location["lng"] = deviceState.location.lng;
+        location["alt"] = deviceState.location.altitude;
+        location["speed"] = deviceState.location.speed;
+        location["course"] = deviceState.location.heading;
+        location["satellites"] = deviceState.location.satellites;
+        location["hdop"] = deviceState.location.hdop;
+        location["timestamp"] = deviceState.location.timestamp;
     }
     
     // 传感器数据
     JsonObject sensors = doc.createNestedObject("sensors");
     
     // IMU数据
-    if (deviceState.telemetry.sensors.imu.valid) {
+    if (deviceState.sensors.imu.valid) {
         JsonObject imu = sensors.createNestedObject("imu");
-        imu["accel_x"] = deviceState.telemetry.sensors.imu.accel_x;
-        imu["accel_y"] = deviceState.telemetry.sensors.imu.accel_y;
-        imu["accel_z"] = deviceState.telemetry.sensors.imu.accel_z;
-        imu["gyro_x"] = deviceState.telemetry.sensors.imu.gyro_x;
-        imu["gyro_y"] = deviceState.telemetry.sensors.imu.gyro_y;
-        imu["gyro_z"] = deviceState.telemetry.sensors.imu.gyro_z;
-        imu["roll"] = deviceState.telemetry.sensors.imu.roll;
-        imu["pitch"] = deviceState.telemetry.sensors.imu.pitch;
-        imu["yaw"] = deviceState.telemetry.sensors.imu.yaw;
-        imu["timestamp"] = deviceState.telemetry.sensors.imu.timestamp;
+        imu["accel_x"] = deviceState.sensors.imu.accel_x;
+        imu["accel_y"] = deviceState.sensors.imu.accel_y;
+        imu["accel_z"] = deviceState.sensors.imu.accel_z;
+        imu["gyro_x"] = deviceState.sensors.imu.gyro_x;
+        imu["gyro_y"] = deviceState.sensors.imu.gyro_y;
+        imu["gyro_z"] = deviceState.sensors.imu.gyro_z;
+        imu["roll"] = deviceState.sensors.imu.roll;
+        imu["pitch"] = deviceState.sensors.imu.pitch;
+        imu["yaw"] = deviceState.sensors.imu.yaw;
+        imu["timestamp"] = deviceState.sensors.imu.timestamp;
     }
     
     // 罗盘数据
-    if (deviceState.telemetry.sensors.compass.valid) {
+    if (deviceState.sensors.compass.valid) {
         JsonObject compass = sensors.createNestedObject("compass");
-        compass["heading"] = deviceState.telemetry.sensors.compass.heading;
-        compass["mag_x"] = deviceState.telemetry.sensors.compass.mag_x;
-        compass["mag_y"] = deviceState.telemetry.sensors.compass.mag_y;
-        compass["mag_z"] = deviceState.telemetry.sensors.compass.mag_z;
-        compass["timestamp"] = deviceState.telemetry.sensors.compass.timestamp;
+        compass["heading"] = deviceState.sensors.compass.heading;
+        compass["mag_x"] = deviceState.sensors.compass.mag_x;
+        compass["mag_y"] = deviceState.sensors.compass.mag_y;
+        compass["mag_z"] = deviceState.sensors.compass.mag_z;
+        compass["timestamp"] = deviceState.sensors.compass.timestamp;
     }
     
     // 系统状态
     JsonObject system = doc.createNestedObject("system");
-    system["battery"] = deviceState.telemetry.system.battery_voltage;
-    system["battery_pct"] = deviceState.telemetry.system.battery_percentage;
-    system["charging"] = deviceState.telemetry.system.is_charging;
-    system["external_power"] = deviceState.telemetry.system.external_power;
-    system["signal"] = deviceState.telemetry.system.signal_strength;
-    system["uptime"] = deviceState.telemetry.system.uptime;
-    system["free_heap"] = deviceState.telemetry.system.free_heap;
+    system["battery"] = deviceState.system.battery_voltage;
+    system["battery_pct"] = deviceState.system.battery_percentage;
+    system["charging"] = deviceState.system.is_charging;
+    system["external_power"] = deviceState.system.external_power;
+    system["signal"] = deviceState.system.signal_strength;
+    system["uptime"] = deviceState.system.uptime;
+    system["free_heap"] = deviceState.system.free_heap;
     
     // 模块状态
     JsonObject modules = doc.createNestedObject("modules");
-    modules["wifi"] = deviceState.telemetry.modules.wifi_ready;
-    modules["ble"] = deviceState.telemetry.modules.ble_ready;
-    modules["gsm"] = deviceState.telemetry.modules.gsm_ready;
-    modules["gnss"] = deviceState.telemetry.modules.gnss_ready;
-    modules["imu"] = deviceState.telemetry.modules.imu_ready;
-    modules["compass"] = deviceState.telemetry.modules.compass_ready;
-    modules["sd"] = deviceState.telemetry.modules.sd_ready;
-    modules["audio"] = deviceState.telemetry.modules.audio_ready;
+    modules["wifi"] = deviceState.modules.wifi_ready;
+    modules["ble"] = deviceState.modules.ble_ready;
+    modules["gsm"] = deviceState.modules.gsm_ready;
+    modules["gnss"] = deviceState.modules.gnss_ready;
+    modules["imu"] = deviceState.modules.imu_ready;
+    modules["compass"] = deviceState.modules.compass_ready;
+    modules["sd"] = deviceState.modules.sd_ready;
+    modules["audio"] = deviceState.modules.audio_ready;
     
     // 存储信息
     JsonObject storage = doc.createNestedObject("storage");
-    storage["size_mb"] = deviceState.sdCardSizeMB;
-    storage["free_mb"] = deviceState.sdCardFreeMB;
+    storage["size_mb"] = deviceState.storage.size_mb;
+    storage["free_mb"] = deviceState.storage.free_mb;
     
     return doc.as<String>();
 }

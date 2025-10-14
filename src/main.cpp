@@ -228,11 +228,9 @@ void setup()
   //================ MadgwickAHRS融合定位初始化结束 ================
 
 #ifdef ENABLE_BLE
-  // BLE数据提供者设置融合定位管理器
-  #ifdef ENABLE_IMU_FUSION
-    bleDataProvider.setFusionManager(&fusionLocationManager);
-    Serial.println("[BLE] 融合定位管理器已设置到BLE数据提供者");
-  #endif
+  // BLE数据源已在device.cpp中设置
+  // 融合定位管理器设置已移除，使用统一数据源
+  Serial.println("[BLE] BLE数据源已通过统一接口设置");
 #endif
 
   // 创建任务
