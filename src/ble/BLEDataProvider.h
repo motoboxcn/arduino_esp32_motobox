@@ -44,6 +44,7 @@ public:
     // 调试
     void setDebug(bool enable);
     void printDataStatus();
+    String generateFusionDebugData();  // 生成融合调试数据
 };
 
 // 全局BLE数据提供者实例

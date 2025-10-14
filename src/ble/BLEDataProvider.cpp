@@ -4,6 +4,10 @@
 
 #include "utils/DebugUtils.h"
 
+#ifdef ENABLE_IMU_FUSION
+#include "location/FusionLocationManager.h"
+#endif
+
 const char* BLEDataProvider::TAG = "BLEDataProvider";
 
 // 全局BLE数据提供者实例
@@ -40,6 +44,9 @@ void BLEDataProvider::update() {
     if (currentTime - lastUpdateTime >= BLE_UPDATE_INTERVAL) {
         lastUpdateTime = currentTime;
         
+        // 从全局状态重新同步数据
+        setDeviceStateFromGlobal();
+        
         // 检查数据源是否有效
         if (deviceState != nullptr) {
             dataValid = true;
@@ -70,46 +77,82 @@ void BLEDataProvider::setDeviceState(const ble_device_state_t* state) {
 
 void BLEDataProvider::setDeviceStateFromGlobal() {
     // 从全局device_state转换数据
-    // 注意：这里需要访问全局device_state，但由于循环包含问题，
-    // 我们暂时使用一个简化的实现
+    // 通过外部函数获取全局device_state指针
+    extern device_state_t device_state;
     
     // 初始化转换后的状态
     memset(&convertedState, 0, sizeof(convertedState));
     
     // 设置基本设备信息
-    convertedState.device_id = "ESP32_XXXXXX";  // 临时值
+    convertedState.device_id = device_state.device_id;
     convertedState.timestamp = millis();
-    convertedState.firmware = "v4.2.0+495";
-    convertedState.hardware = "esp32-air780eg";
-    convertedState.power_mode = 2;
+    convertedState.firmware = device_state.device_firmware_version;
+    convertedState.hardware = device_state.device_hardware_version;
+    convertedState.power_mode = device_state.power_mode;
     
-    // 设置模块状态（临时值）
-    convertedState.modules.wifi_ready = false;
-    convertedState.modules.ble_ready = true;
-    convertedState.modules.gsm_ready = true;
-    convertedState.modules.gnss_ready = false;
-    convertedState.modules.imu_ready = true;
-    convertedState.modules.compass_ready = false;
-    convertedState.modules.sd_ready = false;
-    convertedState.modules.audio_ready = false;
+    // 设置位置数据
+    convertedState.location.lat = device_state.telemetry.location.lat;
+    convertedState.location.lng = device_state.telemetry.location.lng;
+    convertedState.location.altitude = device_state.telemetry.location.altitude;
+    convertedState.location.speed = device_state.telemetry.location.speed;
+    convertedState.location.heading = device_state.telemetry.location.heading;
+    convertedState.location.satellites = device_state.telemetry.location.satellites;
+    convertedState.location.hdop = device_state.telemetry.location.hdop;
+    convertedState.location.valid = device_state.telemetry.location.valid;
+    convertedState.location.timestamp = device_state.telemetry.location.timestamp;
     
-    // 设置系统状态（临时值）
-    convertedState.system.battery_voltage = 3800;
-    convertedState.system.battery_percentage = 80;
-    convertedState.system.is_charging = true;
-    convertedState.system.external_power = true;
-    convertedState.system.signal_strength = 85;
-    convertedState.system.uptime = millis() / 1000;
-    convertedState.system.free_heap = ESP.getFreeHeap();
+    // 设置IMU传感器数据
+    convertedState.sensors.imu.accel_x = device_state.telemetry.sensors.imu.accel_x;
+    convertedState.sensors.imu.accel_y = device_state.telemetry.sensors.imu.accel_y;
+    convertedState.sensors.imu.accel_z = device_state.telemetry.sensors.imu.accel_z;
+    convertedState.sensors.imu.gyro_x = device_state.telemetry.sensors.imu.gyro_x;
+    convertedState.sensors.imu.gyro_y = device_state.telemetry.sensors.imu.gyro_y;
+    convertedState.sensors.imu.gyro_z = device_state.telemetry.sensors.imu.gyro_z;
+    convertedState.sensors.imu.roll = device_state.telemetry.sensors.imu.roll;
+    convertedState.sensors.imu.pitch = device_state.telemetry.sensors.imu.pitch;
+    convertedState.sensors.imu.yaw = device_state.telemetry.sensors.imu.yaw;
+    convertedState.sensors.imu.valid = device_state.telemetry.sensors.imu.valid;
+    convertedState.sensors.imu.timestamp = device_state.telemetry.sensors.imu.timestamp;
     
-    // 设置存储信息（临时值）
-    convertedState.storage.size_mb = 32768;
-    convertedState.storage.free_mb = 16384;
+    // 设置罗盘传感器数据
+    convertedState.sensors.compass.heading = device_state.telemetry.sensors.compass.heading;
+    convertedState.sensors.compass.mag_x = device_state.telemetry.sensors.compass.mag_x;
+    convertedState.sensors.compass.mag_y = device_state.telemetry.sensors.compass.mag_y;
+    convertedState.sensors.compass.mag_z = device_state.telemetry.sensors.compass.mag_z;
+    convertedState.sensors.compass.valid = device_state.telemetry.sensors.compass.valid;
+    convertedState.sensors.compass.timestamp = device_state.telemetry.sensors.compass.timestamp;
+    
+    // 设置模块状态
+    convertedState.modules.wifi_ready = device_state.telemetry.modules.wifi_ready;
+    convertedState.modules.ble_ready = device_state.telemetry.modules.ble_ready;
+    convertedState.modules.gsm_ready = device_state.telemetry.modules.gsm_ready;
+    convertedState.modules.gnss_ready = device_state.telemetry.modules.gnss_ready;
+    convertedState.modules.imu_ready = device_state.telemetry.modules.imu_ready;
+    convertedState.modules.compass_ready = device_state.telemetry.modules.compass_ready;
+    convertedState.modules.sd_ready = device_state.telemetry.modules.sd_ready;
+    convertedState.modules.audio_ready = device_state.telemetry.modules.audio_ready;
+    
+    // 设置系统状态
+    convertedState.system.battery_voltage = device_state.telemetry.system.battery_voltage;
+    convertedState.system.battery_percentage = device_state.telemetry.system.battery_percentage;
+    convertedState.system.is_charging = device_state.telemetry.system.is_charging;
+    convertedState.system.external_power = device_state.telemetry.system.external_power;
+    convertedState.system.signal_strength = device_state.telemetry.system.signal_strength;
+    convertedState.system.uptime = device_state.telemetry.system.uptime;
+    convertedState.system.free_heap = device_state.telemetry.system.free_heap;
+    
+    // 设置存储信息
+    convertedState.storage.size_mb = device_state.sdCardSizeMB;
+    convertedState.storage.free_mb = device_state.sdCardFreeMB;
     
     deviceState = &convertedState;
     
     #ifdef BLE_DEBUG_ENABLED
     Serial.println("[BLE数据提供者] 从全局状态转换完成");
+    Serial.printf("[BLE数据提供者] 位置有效: %s, IMU有效: %s, 电池: %dmV\n",
+                 convertedState.location.valid ? "是" : "否",
+                 convertedState.sensors.imu.valid ? "是" : "否",
+                 convertedState.system.battery_voltage);
     #endif
 }
 
@@ -143,6 +186,64 @@ void BLEDataProvider::printDataStatus() {
     }
     
     Serial.println("========================");
+}
+
+String BLEDataProvider::generateFusionDebugData() {
+    String debugData = "";
+    
+#ifdef ENABLE_IMU_FUSION
+    extern FusionLocationManager fusionLocationManager;
+    
+    if (fusionLocationManager.isInitialized()) {
+        // 获取融合位置
+        Position pos = fusionLocationManager.getFusedPosition();
+        
+        // 构建JSON格式的调试数据
+        debugData = "{";
+        debugData += "\"timestamp\":" + String(millis()) + ",";
+        debugData += "\"fusion_status\":\"active\",";
+        
+        if (pos.valid) {
+            debugData += "\"position\":{";
+            debugData += "\"lat\":" + String(pos.lat, 6) + ",";
+            debugData += "\"lng\":" + String(pos.lng, 6) + ",";
+            debugData += "\"alt\":" + String(pos.altitude, 1) + ",";
+            debugData += "\"speed\":" + String(pos.speed * 3.6f, 2) + ",";
+            debugData += "\"heading\":" + String(pos.heading, 1) + ",";
+            debugData += "\"accuracy\":" + String(pos.accuracy, 2);
+            debugData += "},";
+        } else {
+            debugData += "\"position\":{\"valid\":false},";
+        }
+        
+        // 添加姿态信息
+        debugData += "\"attitude\":{";
+        debugData += "\"roll\":" + String(pos.roll, 1) + ",";
+        debugData += "\"pitch\":" + String(pos.pitch, 1) + ",";
+        debugData += "\"yaw\":" + String(pos.heading, 1);
+        debugData += "},";
+        
+        // 添加融合状态信息
+        debugData += "\"fusion_info\":{";
+        debugData += "\"position_valid\":" + String(pos.valid ? "true" : "false") + ",";
+        debugData += "\"accuracy\":" + String(pos.accuracy, 2);
+        debugData += "},";
+        
+        // 添加统计信息
+        debugData += "\"stats\":{";
+        debugData += "\"uptime\":" + String(millis() / 1000) + ",";
+        debugData += "\"free_heap\":" + String(ESP.getFreeHeap());
+        debugData += "}";
+        
+        debugData += "}";
+    } else {
+        debugData = "{\"fusion_status\":\"inactive\",\"error\":\"Fusion system not initialized\"}";
+    }
+#else
+    debugData = "{\"fusion_status\":\"disabled\",\"error\":\"IMU fusion not enabled\"}";
+#endif
+
+    return debugData;
 }
 
 #endif // ENABLE_BLE

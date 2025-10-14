@@ -56,6 +56,8 @@ BLEManager::BLEManager()
     : pServer(nullptr)
     , pService(nullptr)
     , pTelemetryCharacteristic(nullptr)
+    , pDebugCharacteristic(nullptr)
+    , pFusionDebugCharacteristic(nullptr)
     , serverCallbacks(nullptr)
     , charCallbacks(nullptr)
     , isInitialized(false)
@@ -64,6 +66,8 @@ BLEManager::BLEManager()
     , isConnected(false)
     , isAdvertising(false)
     , lastTelemetryData("")
+    , lastDebugData("")
+    , lastFusionDebugData("")
 {
 }
 
@@ -188,11 +192,27 @@ void BLEManager::createCharacteristics() {
     pTelemetryCharacteristic->setCallbacks(charCallbacks);
     pTelemetryCharacteristic->addDescriptor(new BLE2902());
     
+    // 创建调试数据特征值
+    pDebugCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_DEBUG_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pDebugCharacteristic->setCallbacks(charCallbacks);
+    pDebugCharacteristic->addDescriptor(new BLE2902());
+    
+    // 创建融合数据调试特征值
+    pFusionDebugCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_FUSION_DEBUG_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pFusionDebugCharacteristic->setCallbacks(charCallbacks);
+    pFusionDebugCharacteristic->addDescriptor(new BLE2902());
+    
     // 启动服务
     pService->start();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.println("[BLE] ✅ BLE特征值创建成功（统一遥测数据）");
+    Serial.println("[BLE] ✅ BLE特征值创建成功（遥测数据 + 调试数据 + 融合调试数据）");
     #endif
 }
 
@@ -275,6 +295,48 @@ void BLEManager::updateTelemetryData(const ble_device_state_t& deviceState) {
     
     #ifdef BLE_DEBUG_ENABLED
     Serial.printf("[BLE] 遥测数据已更新: %d 字节\n", jsonData.length());
+    #endif
+}
+
+void BLEManager::updateDebugData(const String& debugMessage) {
+    if (!isInitialized || !pDebugCharacteristic) {
+        return;
+    }
+    
+    // 检查数据是否有变化
+    if (debugMessage == lastDebugData) {
+        return;
+    }
+    
+    lastDebugData = debugMessage;
+    
+    // 设置特征值并通知
+    pDebugCharacteristic->setValue(debugMessage.c_str());
+    pDebugCharacteristic->notify();
+    
+    #ifdef BLE_DEBUG_ENABLED
+    Serial.printf("[BLE] 调试数据已更新: %d 字节\n", debugMessage.length());
+    #endif
+}
+
+void BLEManager::updateFusionDebugData(const String& fusionDebugMessage) {
+    if (!isInitialized || !pFusionDebugCharacteristic) {
+        return;
+    }
+    
+    // 检查数据是否有变化
+    if (fusionDebugMessage == lastFusionDebugData) {
+        return;
+    }
+    
+    lastFusionDebugData = fusionDebugMessage;
+    
+    // 设置特征值并通知
+    pFusionDebugCharacteristic->setValue(fusionDebugMessage.c_str());
+    pFusionDebugCharacteristic->notify();
+    
+    #ifdef BLE_DEBUG_ENABLED
+    Serial.printf("[BLE] 融合调试数据已更新: %d 字节\n", fusionDebugMessage.length());
     #endif
 }
 

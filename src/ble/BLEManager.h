@@ -48,8 +48,10 @@ private:
     BLEServer* pServer;
     BLEService* pService;
     
-    // 单一遥测特征值
-    BLECharacteristic* pTelemetryCharacteristic;
+    // 特征值
+    BLECharacteristic* pTelemetryCharacteristic;  // 遥测数据特征值
+    BLECharacteristic* pDebugCharacteristic;      // 调试数据特征值
+    BLECharacteristic* pFusionDebugCharacteristic; // 融合数据调试特征值
     
     // 回调对象
     MotoBoxBLEServerCallbacks* serverCallbacks;
@@ -64,6 +66,8 @@ private:
     
     // 数据缓存
     String lastTelemetryData;
+    String lastDebugData;
+    String lastFusionDebugData;
     
     // 内部方法
     void createService();
@@ -94,6 +98,8 @@ public:
     
     // 数据更新
     void updateTelemetryData(const ble_device_state_t& deviceState);
+    void updateDebugData(const String& debugMessage);
+    void updateFusionDebugData(const String& fusionDebugMessage);
     
     // 调试和状态
     void setDebug(bool enable);
