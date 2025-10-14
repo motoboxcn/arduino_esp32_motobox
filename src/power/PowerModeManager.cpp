@@ -345,27 +345,20 @@ void PowerModeManager::applyMQTTConfig(const PowerModeConfig& config) {
     if (config.mqtt_location_interval_ms > 0) {
         // 由于Air780EG库不支持动态更新任务间隔，我们需要重新创建任务
         // 先移除现有任务
-        air780eg.getMQTT().removeScheduledTask("location");
-        air780eg.getMQTT().removeScheduledTask("device_status");
+        air780eg.getMQTT().removeScheduledTask("telemetry");
         
-        // 重新添加任务（需要在device.cpp中定义的回调函数）
-        extern String getLocationJSON();
-        extern String getDeviceStatusJSON();
+        // 重新添加统一遥测任务
+        extern Device device;
+        air780eg.getMQTT().addScheduledTask("telemetry", 
+            "vehicle/v1/" + get_device_state()->device_id + "/telemetry", 
+            []() { return device.getCombinedTelemetryJSON(); }, 
+            config.mqtt_location_interval_ms, 0, false);
         
-        air780eg.getMQTT().addScheduledTask("location", 
-            "vehicle/v1/" + get_device_state()->device_id + "/telemetry/location", 
-            getLocationJSON, config.mqtt_location_interval_ms, 0, false);
-            
-        air780eg.getMQTT().addScheduledTask("device_status", 
-            "vehicle/v1/" + get_device_state()->device_id + "/telemetry/device", 
-            getDeviceStatusJSON, config.mqtt_device_status_interval_ms, 0, false);
-        
-        Serial.printf("[功耗管理] MQTT配置 - 位置间隔: %lums, 状态间隔: %lums\n", 
-                     config.mqtt_location_interval_ms, config.mqtt_device_status_interval_ms);
+        Serial.printf("[功耗管理] MQTT配置 - 遥测间隔: %lums\n", 
+                     config.mqtt_location_interval_ms);
     } else {
         // 禁用MQTT任务
-        air780eg.getMQTT().disableScheduledTask("location");
-        air780eg.getMQTT().disableScheduledTask("device_status");
+        air780eg.getMQTT().disableScheduledTask("telemetry");
         Serial.println("[功耗管理] MQTT配置 - 已禁用");
     }
     #endif

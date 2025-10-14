@@ -308,7 +308,7 @@ void IMU::setGyroEnabled(bool enabled)
 void IMU::loop()
 {
     // 高频数据读取，支持EKF算法的高频更新需求
-    get_device_state()->imuReady = true;
+    get_device_state()->telemetry.modules.imu_ready = true;
     
     // 添加调试：检查数据读取前的状态
     static unsigned long lastDebugTime = 0;
@@ -380,6 +380,12 @@ void IMU::loop()
     imu_data.pitch = 0.5f * (imu_data.pitch + imu_data.gyro_y * IMU_DT) + 0.5f * pitch_acc;
 
     imu_data.temperature = qmi.getTemperature_C();
+
+    // 更新到统一数据管理
+    extern Device device;
+    device.updateIMUData(imu_data.accel_x, imu_data.accel_y, imu_data.accel_z,
+                        imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z,
+                        imu_data.roll, imu_data.pitch, imu_data.yaw);
 
     // 处理运动检测中断
     if (motionDetectionEnabled && isMotionDetected())

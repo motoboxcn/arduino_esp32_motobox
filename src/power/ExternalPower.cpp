@@ -27,7 +27,7 @@ void ExternalPower::begin()
     _last_change_time = millis();
     
     // 更新设备状态
-    device_state.external_power = _is_connected;
+    device_state.telemetry.system.external_power = _is_connected;
     
     Serial.println(String("外部电源检测初始化完成，引脚: ") + String(_pin) + 
                ", 初始状态: " + (_is_connected ? "已连接" : "未连接"));
@@ -74,7 +74,7 @@ void ExternalPower::updateState()
             _is_connected = _raw_state;
             
             // 更新设备状态
-            device_state.external_power = _is_connected;
+            device_state.telemetry.system.external_power = _is_connected;
             
             // 统一的状态变化输出
             String status_text = _is_connected ? "车辆电门接入" : "车辆电门断开";

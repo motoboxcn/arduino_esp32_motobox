@@ -119,10 +119,10 @@ UpgradeCondition OTAManager::checkUpgradeConditions(String newVersion) {
 bool OTAManager::checkBatteryLevel() {
     // 从设备状态获取电池电量百分比
     extern device_state_t device_state;
-    int batteryLevel = device_state.battery_percentage;
+    int batteryLevel = device_state.telemetry.system.battery_percentage;
     
     logMessage("当前电池电量: " + String(batteryLevel) + "%");
-    logMessage("充电状态: " + String(device_state.is_charging ? "充电中" : "未充电"));
+    logMessage("充电状态: " + String(device_state.telemetry.system.is_charging ? "充电中" : "未充电"));
     
     return batteryLevel >= OTA_BATTERY_MIN_LEVEL;
 }

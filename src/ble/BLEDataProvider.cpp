@@ -96,13 +96,13 @@ void BLEDataProvider::update() {
         lastBatteryUpdate = currentTime;
     }
     
-    // 更新IMU数据 (每100ms更新一次)
-    if (currentTime - lastIMUUpdate >= 100) {
+    // 更新IMU数据 (每200ms更新一次，5Hz)
+    if (currentTime - lastIMUUpdate >= 200) {
         updateIMUData();
         lastIMUUpdate = currentTime;
     }
     
-    // 更新融合数据 (每50ms更新一次，20Hz)
+    // 更新融合数据 (每200ms更新一次，5Hz)
     if (currentTime - lastFusionUpdate >= BLE_FUSION_UPDATE_INTERVAL) {
         updateFusionData();
         lastFusionUpdate = currentTime;
@@ -169,13 +169,13 @@ void BLEDataProvider::updateSystemStatus() {
 
 void BLEDataProvider::convertGPSData() {
     // 从device_state获取GPS数据（已经由系统更新）
-    cachedGPSData.latitude = device_state.latitude;
-    cachedGPSData.longitude = device_state.longitude;
-    cachedGPSData.altitude = 0;  // device_state中没有海拔数据
-    cachedGPSData.speed = 0;     // device_state中没有速度数据
-    cachedGPSData.course = 0;    // device_state中没有航向数据
-    cachedGPSData.satellites = device_state.satellites;
-    cachedGPSData.valid = device_state.gnssReady;
+    cachedGPSData.latitude = device_state.telemetry.location.lat;
+    cachedGPSData.longitude = device_state.telemetry.location.lng;
+    cachedGPSData.altitude = device_state.telemetry.location.altitude;
+    cachedGPSData.speed = device_state.telemetry.location.speed;
+    cachedGPSData.course = device_state.telemetry.location.heading;
+    cachedGPSData.satellites = device_state.telemetry.location.satellites;
+    cachedGPSData.valid = device_state.telemetry.location.valid;
     
     gpsDataValid = cachedGPSData.valid;
     
@@ -199,7 +199,7 @@ void BLEDataProvider::convertBatteryData() {
     cachedBatteryData.is_charging = battery->isCharging();
     
     // 获取外部电源状态（从device_state）
-    cachedBatteryData.external_power = device_state.external_power;
+    cachedBatteryData.external_power = device_state.telemetry.system.external_power;
     
     batteryDataValid = true;
     
@@ -317,7 +317,7 @@ void BLEDataProvider::convertSystemStatus() {
     cachedSystemStatus.loop_count = 0; // TODO: 从main loop获取
     
     // 模块状态
-    cachedSystemStatus.gps_status = device_state.gnssReady ? 1 : 0;
+    cachedSystemStatus.gps_status = device_state.telemetry.modules.gnss_ready ? 1 : 0;
     cachedSystemStatus.imu_status = (imu != nullptr) ? 1 : 0;
     cachedSystemStatus.battery_status = (battery != nullptr) ? 
         (battery->isCharging() ? 2 : (battery->getPercentage() > 20 ? 1 : 0)) : 0;

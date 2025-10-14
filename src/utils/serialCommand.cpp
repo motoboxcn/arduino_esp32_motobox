@@ -30,12 +30,12 @@ void handleSerialCommand()
             Serial.println("运行时间: " + String(millis() / 1000) + " 秒");
             Serial.println("");
             Serial.println("--- 连接状态 ---");
-            Serial.println("WiFi状态: " + String(device_state.wifiConnected ? "已连接" : "未连接"));
-            Serial.println("BLE状态: " + String(device_state.bleConnected ? "已连接" : "未连接"));
+            Serial.println("WiFi状态: " + String(device_state.telemetry.modules.wifi_ready ? "已连接" : "未连接"));
+            Serial.println("BLE状态: " + String(device_state.telemetry.modules.ble_ready ? "已连接" : "未连接"));
 #ifdef ENABLE_GSM
-            Serial.println("GSM状态: " + String(device_state.gsmReady ? "就绪" : "未就绪"));
+            Serial.println("GSM状态: " + String(device_state.telemetry.modules.gsm_ready ? "就绪" : "未就绪"));
 #ifdef USE_AIR780EG_GSM
-            if (device_state.gsmReady)
+            if (device_state.telemetry.modules.gsm_ready)
             {
                 Serial.println("网络状态: " + String(air780eg.getNetwork().isNetworkRegistered() ? "已连接" : "未连接"));
                 Serial.println("信号强度: " + String(air780eg.getNetwork().getSignalStrength()) + " dBm");
@@ -71,15 +71,15 @@ void handleSerialCommand()
 #endif
             Serial.println("");
             Serial.println("--- 传感器状态 ---");
-            Serial.println("GNSS状态: " + String(device_state.gnssReady ? "就绪" : "未就绪"));
-            Serial.println("IMU状态: " + String(device_state.imuReady ? "就绪" : "未就绪"));
-            Serial.println("罗盘状态: " + String(device_state.compassReady ? "就绪" : "未就绪"));
+            Serial.println("GNSS状态: " + String(device_state.telemetry.modules.gnss_ready ? "就绪" : "未就绪"));
+            Serial.println("IMU状态: " + String(device_state.telemetry.modules.imu_ready ? "就绪" : "未就绪"));
+            Serial.println("罗盘状态: " + String(device_state.telemetry.modules.compass_ready ? "就绪" : "未就绪"));
             Serial.println("");
             Serial.println("--- 电源状态 ---");
-            Serial.println("电池电压: " + String(device_state.battery_voltage) + " mV");
-            Serial.println("电池电量: " + String(device_state.battery_percentage) + "%");
-            Serial.println("充电状态: " + String(device_state.is_charging ? "充电中" : "未充电"));
-            Serial.println("外部电源: " + String(device_state.external_power ? "已连接" : "未连接"));
+            Serial.println("电池电压: " + String(device_state.telemetry.system.battery_voltage) + " mV");
+            Serial.println("电池电量: " + String(device_state.telemetry.system.battery_percentage) + "%");
+            Serial.println("充电状态: " + String(device_state.telemetry.system.is_charging ? "充电中" : "未充电"));
+            Serial.println("外部电源: " + String(device_state.telemetry.system.external_power ? "已连接" : "未连接"));
             Serial.println("");
 #ifdef ENABLE_SDCARD
             Serial.println("--- SD卡状态 ---");
@@ -117,8 +117,8 @@ void handleSerialCommand()
 
 #ifdef USE_AIR780EG_GSM
                 Serial.println("连接方式: Air780EG GSM");
-                Serial.println("GSM状态: " + String(device_state.gsmReady ? "就绪" : "未就绪"));
-                if (device_state.gsmReady)
+                Serial.println("GSM状态: " + String(device_state.telemetry.modules.gsm_ready ? "就绪" : "未就绪"));
+                if (device_state.telemetry.modules.gsm_ready)
                 {
                     Serial.println("网络状态: " + String(air780eg.getNetwork().isNetworkRegistered() ? "已连接" : "未连接"));
                     Serial.println("信号强度: " + String(air780eg.getNetwork().getSignalStrength()) + " dBm");

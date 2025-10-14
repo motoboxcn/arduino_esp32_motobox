@@ -80,7 +80,7 @@ void LEDManager::setLEDState(LEDMode mode, LEDColor color, uint8_t brightness) {
 
 void LEDManager::updateChargingStatus() {
     // 获取当前充电状态
-    bool currentChargingState = device_state.is_charging;
+    bool currentChargingState = device_state.telemetry.system.is_charging;
     
     // 检测充电状态变化
     if (currentChargingState != _lastChargingState) {

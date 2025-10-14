@@ -146,15 +146,24 @@ void taskDataProcessing(void *parameter)
     // 调用新库的主循环（处理URC、网络状态更新、GNSS数据更新等）
     air780eg.loop();
     
-    // 获取GPS数据并更新到融合定位系统
-#ifdef ENABLE_IMU_FUSION
+    // 获取GPS数据并更新到融合定位系统和统一数据管理
     if (air780eg.getGNSS().isDataValid()) {
         double lat = air780eg.getGNSS().getLatitude();
         double lng = air780eg.getGNSS().getLongitude();
+        float alt = air780eg.getGNSS().getAltitude();
         float speed = air780eg.getGNSS().getSpeed() / 3.6f; // 转换为m/s
+        float heading = air780eg.getGNSS().getCourse();
+        uint8_t sats = air780eg.getGNSS().getSatelliteCount();
+        float hdop = air780eg.getGNSS().getHDOP();
+        
+        // 更新到统一数据管理
+        device.updateLocationData(lat, lng, alt, speed, heading, sats, hdop);
+        
+#ifdef ENABLE_IMU_FUSION
+        // 更新到融合定位系统
         fusionLocationManager.updateWithGPS(lat, lng, speed, true);
-    }
 #endif
+    }
 #endif
 
 #ifdef ENABLE_COMPASS
@@ -282,6 +291,19 @@ void loop()
 
   // 数据采集器处理
   dataCollector.loop();
+  
+  // 更新系统状态到统一数据管理
+  static unsigned long lastSystemUpdate = 0;
+  if (millis() - lastSystemUpdate > 5000) { // 每5秒更新一次系统状态
+    int signal_strength = 0;
+#ifdef USE_AIR780EG_GSM
+    if (air780eg.isInitialized()) {
+      signal_strength = air780eg.getNetwork().getSignalStrength();
+    }
+#endif
+    device.updateSystemData(signal_strength, millis()/1000, ESP.getFreeHeap());
+    lastSystemUpdate = millis();
+  }
 
 #ifdef ENABLE_BLE
   // BLE数据更新

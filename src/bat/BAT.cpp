@@ -154,7 +154,7 @@ void BAT::loop()
 {
     // 更新充电状态（带防抖）
     bool charging_changed = updateChargingState();
-    device_state.is_charging = _is_charging;
+    device_state.telemetry.system.is_charging = _is_charging;
 
     // 只在充电状态真正变化时才输出调试信息
     if (charging_changed && _debug) {
@@ -237,9 +237,14 @@ void BAT::loop()
 
     // 只有当百分比变化超过1%才更新
     if (abs(percentage - last_percentage) >= 1 || last_percentage == -1) {
-        device_state.battery_voltage = stable_voltage;
-        device_state.battery_percentage = percentage;
+        device_state.telemetry.system.battery_voltage = stable_voltage;
+        device_state.telemetry.system.battery_percentage = percentage;
         last_percentage = percentage;
+        
+        // 更新到统一数据管理
+        extern Device device;
+        // 从device_state获取外部电源状态
+        device.updateBatteryData(stable_voltage, percentage, _is_charging, device_state.telemetry.system.external_power);
         
         String debug_msg = "状态更新 -> 充电: " + String(_is_charging ? "是" : "否");
         debug_msg += ", 电压: " + String(stable_voltage) + "mV (" + String(percentage) + "%)";
@@ -255,8 +260,8 @@ void BAT::loop()
 void BAT::print_voltage()
 {
     String debug_msg = "电压报告 -> " + String(stable_voltage) + "mV";
-    debug_msg += " (" + String(device_state.battery_percentage) + "%)";
-    debug_msg += ", 充电: " + String(device_state.is_charging ? "是" : "否");
+    debug_msg += " (" + String(device_state.telemetry.system.battery_percentage) + "%)";
+    debug_msg += ", 充电: " + String(device_state.telemetry.system.is_charging ? "是" : "否");
     debugPrint(debug_msg);
 }
 

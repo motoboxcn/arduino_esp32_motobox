@@ -106,7 +106,7 @@ bool Compass::begin() {
     qmc.setCalibrationScales(1.0, 1.0, 1.0);
     
     _initialized = true;
-    device_state.compassReady = true;
+    device_state.telemetry.modules.compass_ready = true;
     
     Serial.printf("[%s] 初始化完成\n", TAG);
     return true;
@@ -217,7 +217,7 @@ bool Compass::isDataValid() {
 
 void Compass::reset() {
     _initialized = false;
-    device_state.compassReady = false;
+    device_state.telemetry.modules.compass_ready = false;
     compass_data.isValid = false;
     Serial.printf("[%s] 罗盘已重置\n", TAG);
 }
@@ -240,6 +240,10 @@ void Compass::updateCompassData(int16_t x, int16_t y, int16_t z, float heading) 
     compass_data.directionCN = DIRECTION_CN[compass_data.direction];
     compass_data.isValid = true;
     compass_data.timestamp = millis();
+    
+    // 更新到统一数据管理
+    extern Device device;
+    device.updateCompassData(heading, (float)x, (float)y, (float)z);
 }
 
 void Compass::enterLowPowerMode()

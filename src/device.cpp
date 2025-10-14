@@ -29,22 +29,23 @@ void print_device_info()
     Serial.printf("Sleep Time: %d\n", device_state.sleep_time);
     Serial.printf("Firmware Version: %s\n", device_state.device_firmware_version);
     Serial.printf("Hardware Version: %s\n", device_state.device_hardware_version);
-    Serial.printf("WiFi Connected: %d\n", device_state.wifiConnected);
-    Serial.printf("BLE Connected: %d\n", device_state.bleConnected);
-    Serial.printf("Battery Voltage: %d\n", device_state.battery_voltage);
-    Serial.printf("Battery Percentage: %d\n", device_state.battery_percentage);
-    Serial.printf("ICharging: %d\n", device_state.is_charging);
-    Serial.printf("EPower: %d\n", device_state.external_power);
-    Serial.printf("GSM Ready: %d\n", device_state.gsmReady);
-    Serial.printf("IMU Ready: %d\n", device_state.imuReady);
-    Serial.printf("Compass Ready: %d\n", device_state.compassReady);
-    Serial.printf("SD Card Ready: %d\n", device_state.sdCardReady);
-    if (device_state.sdCardReady)
+    Serial.printf("WiFi Ready: %d\n", device_state.telemetry.modules.wifi_ready);
+    Serial.printf("BLE Ready: %d\n", device_state.telemetry.modules.ble_ready);
+    Serial.printf("Battery Voltage: %d\n", device_state.telemetry.system.battery_voltage);
+    Serial.printf("Battery Percentage: %d\n", device_state.telemetry.system.battery_percentage);
+    Serial.printf("Charging: %d\n", device_state.telemetry.system.is_charging);
+    Serial.printf("External Power: %d\n", device_state.telemetry.system.external_power);
+    Serial.printf("GSM Ready: %d\n", device_state.telemetry.modules.gsm_ready);
+    Serial.printf("GNSS Ready: %d\n", device_state.telemetry.modules.gnss_ready);
+    Serial.printf("IMU Ready: %d\n", device_state.telemetry.modules.imu_ready);
+    Serial.printf("Compass Ready: %d\n", device_state.telemetry.modules.compass_ready);
+    Serial.printf("SD Card Ready: %d\n", device_state.telemetry.modules.sd_ready);
+    if (device_state.telemetry.modules.sd_ready)
     {
         Serial.printf("SD Card Size: %llu MB\n", device_state.sdCardSizeMB);
         Serial.printf("SD Card Free: %llu MB\n", device_state.sdCardFreeMB);
     }
-    Serial.printf("Audio Ready: %d\n", device_state.audioReady);
+    Serial.printf("Audio Ready: %d\n", device_state.telemetry.modules.audio_ready);
     Serial.println("--------------------------------");
 }
 
@@ -75,23 +76,23 @@ String device_state_to_json(device_state_t *state)
     StaticJsonDocument<256> doc; // 精简后更小即可
     doc["fw"] = device_state.device_firmware_version;
     doc["hw"] = device_state.device_hardware_version;
-    doc["wifi"] = device_state.wifiConnected;
-    doc["ble"] = device_state.bleConnected;
-    doc["gsm"] = device_state.gsmReady;
-    doc["gnss"] = device_state.gnssReady;
-    doc["imu"] = device_state.imuReady;
-    doc["compass"] = device_state.compassReady;
-    doc["bat_v"] = device_state.battery_voltage;
-    doc["bat_pct"] = device_state.battery_percentage;
-    doc["is_charging"] = device_state.is_charging;
-    doc["ext_power"] = device_state.external_power;
-    doc["sd"] = device_state.sdCardReady;
-    if (device_state.sdCardReady)
+    doc["wifi"] = device_state.telemetry.modules.wifi_ready;
+    doc["ble"] = device_state.telemetry.modules.ble_ready;
+    doc["gsm"] = device_state.telemetry.modules.gsm_ready;
+    doc["gnss"] = device_state.telemetry.modules.gnss_ready;
+    doc["imu"] = device_state.telemetry.modules.imu_ready;
+    doc["compass"] = device_state.telemetry.modules.compass_ready;
+    doc["bat_v"] = device_state.telemetry.system.battery_voltage;
+    doc["bat_pct"] = device_state.telemetry.system.battery_percentage;
+    doc["is_charging"] = device_state.telemetry.system.is_charging;
+    doc["ext_power"] = device_state.telemetry.system.external_power;
+    doc["sd"] = device_state.telemetry.modules.sd_ready;
+    if (device_state.telemetry.modules.sd_ready)
     {
         doc["sd_size"] = device_state.sdCardSizeMB;
         doc["sd_free"] = device_state.sdCardFreeMB;
     }
-    doc["audio"] = device_state.audioReady;
+    doc["audio"] = device_state.telemetry.modules.audio_ready;
     return doc.as<String>();
 }
 
@@ -312,9 +313,10 @@ void Device::begin()
     // 初始化BLE管理器（使用设备ID）
     Serial.println("[BLE] 开始初始化BLE系统...");
     if (bleManager.begin(device_state.device_id)) {
-        device_state.bleConnected = false; // 初始状态为未连接
+        device_state.telemetry.modules.ble_ready = true; // 初始状态为就绪
         Serial.println("[BLE] ✅ BLE系统初始化成功");
     } else {
+        device_state.telemetry.modules.ble_ready = false;
         Serial.println("[BLE] ❌ BLE系统初始化失败");
     }
     
@@ -347,12 +349,12 @@ void Device::begin()
     try
     {
         imu.begin();
-        device_state.imuReady = true; // 设置IMU状态为就绪
+        device_state.telemetry.modules.imu_ready = true; // 设置IMU状态为就绪
         Serial.println("[IMU] ✅ IMU系统初始化成功，状态已设置为就绪");
     }
     catch (...)
     {
-        device_state.imuReady = false;
+        device_state.telemetry.modules.imu_ready = false;
         Serial.println("[IMU] ❌ IMU系统初始化异常");
     }
 
@@ -431,16 +433,16 @@ void update_device_state()
     static device_state_t last_state;
 
     // 检查电池状态变化
-    if (device_state.battery_percentage != last_state.battery_percentage)
+    if (device_state.telemetry.system.battery_percentage != last_state.telemetry.system.battery_percentage)
     {
         notify_state_change("电池电量",
-                            String(last_state.battery_percentage).c_str(),
-                            String(device_state.battery_percentage).c_str());
+                            String(last_state.telemetry.system.battery_percentage).c_str(),
+                            String(device_state.telemetry.system.battery_percentage).c_str());
         state_changes.battery_changed = true;
 
         // LED显示现在由LEDManager根据充电状态自动处理
         // 只有在电池电量极低时才显示红色警告
-        if (device_state.battery_percentage <= 10)
+        if (device_state.telemetry.system.battery_percentage <= 10)
         {
             ledManager.setLEDState(LED_BLINK_FAST, LED_COLOR_RED, 20);
         }
@@ -448,59 +450,59 @@ void update_device_state()
     }
 
     // 检查外部电源状态变化
-    if (device_state.external_power != last_state.external_power)
+    if (device_state.telemetry.system.external_power != last_state.telemetry.system.external_power)
     {
         notify_state_change("外部电源",
-                            last_state.external_power ? "已连接" : "未连接",
-                            device_state.external_power ? "已连接" : "未连接");
+                            last_state.telemetry.system.external_power ? "已连接" : "未连接",
+                            device_state.telemetry.system.external_power ? "已连接" : "未连接");
         state_changes.external_power_changed = true;
     }
 
     // 检查网络状态变化 - 根据模式区分
 #ifdef ENABLE_WIFI
-    if (device_state.wifiConnected != last_state.wifiConnected)
+    if (device_state.telemetry.modules.wifi_ready != last_state.telemetry.modules.wifi_ready)
     {
         notify_state_change("WiFi连接",
-                            last_state.wifiConnected ? "已连接" : "未连接",
-                            device_state.wifiConnected ? "已连接" : "未连接");
+                            last_state.telemetry.modules.wifi_ready ? "已连接" : "未连接",
+                            device_state.telemetry.modules.wifi_ready ? "已连接" : "未连接");
         state_changes.wifi_changed = true;
     }
 #endif
 
     // 检查BLE状态变化
-    if (device_state.bleConnected != last_state.bleConnected)
+    if (device_state.telemetry.modules.ble_ready != last_state.telemetry.modules.ble_ready)
     {
         notify_state_change("BLE连接",
-                            last_state.bleConnected ? "已连接" : "未连接",
-                            device_state.bleConnected ? "已连接" : "未连接");
+                            last_state.telemetry.modules.ble_ready ? "已连接" : "未连接",
+                            device_state.telemetry.modules.ble_ready ? "已连接" : "未连接");
         state_changes.ble_changed = true;
     }
 
 #ifdef ENABLE_GSM
-    if (device_state.gsmReady != last_state.gsmReady)
+    if (device_state.telemetry.modules.gsm_ready != last_state.telemetry.modules.gsm_ready)
     {
-        notify_state_change("GNSS状态",
-                            last_state.gsmReady ? "就绪" : "未就绪",
-                            device_state.gsmReady ? "就绪" : "未就绪");
-        device_state.gsmReady = device_state.gsmReady;
+        notify_state_change("GSM状态",
+                            last_state.telemetry.modules.gsm_ready ? "就绪" : "未就绪",
+                            device_state.telemetry.modules.gsm_ready ? "就绪" : "未就绪");
+        state_changes.gsm_changed = true;
     }
 #endif
 
     // 检查IMU状态变化
-    if (device_state.imuReady != last_state.imuReady)
+    if (device_state.telemetry.modules.imu_ready != last_state.telemetry.modules.imu_ready)
     {
         notify_state_change("IMU状态",
-                            last_state.imuReady ? "就绪" : "未就绪",
-                            device_state.imuReady ? "就绪" : "未就绪");
+                            last_state.telemetry.modules.imu_ready ? "就绪" : "未就绪",
+                            device_state.telemetry.modules.imu_ready ? "就绪" : "未就绪");
         state_changes.imu_changed = true;
     }
 
     // 检查罗盘状态变化
-    if (device_state.compassReady != last_state.compassReady)
+    if (device_state.telemetry.modules.compass_ready != last_state.telemetry.modules.compass_ready)
     {
         notify_state_change("罗盘状态",
-                            last_state.compassReady ? "就绪" : "未就绪",
-                            device_state.compassReady ? "就绪" : "未就绪");
+                            last_state.telemetry.modules.compass_ready ? "就绪" : "未就绪",
+                            device_state.telemetry.modules.compass_ready ? "就绪" : "未就绪");
         state_changes.compass_changed = true;
     }
 
@@ -523,20 +525,20 @@ void update_device_state()
     }
 
     // 检查SD卡状态变化
-    if (device_state.sdCardReady != last_state.sdCardReady)
+    if (device_state.telemetry.modules.sd_ready != last_state.telemetry.modules.sd_ready)
     {
         notify_state_change("SD卡状态",
-                            last_state.sdCardReady ? "就绪" : "未就绪",
-                            device_state.sdCardReady ? "就绪" : "未就绪");
+                            last_state.telemetry.modules.sd_ready ? "就绪" : "未就绪",
+                            device_state.telemetry.modules.sd_ready ? "就绪" : "未就绪");
         state_changes.sdcard_changed = true;
     }
 
     // 检查音频状态变化
-    if (device_state.audioReady != last_state.audioReady)
+    if (device_state.telemetry.modules.audio_ready != last_state.telemetry.modules.audio_ready)
     {
         notify_state_change("音频状态",
-                            last_state.audioReady ? "就绪" : "未就绪",
-                            device_state.audioReady ? "就绪" : "未就绪");
+                            last_state.telemetry.modules.audio_ready ? "就绪" : "未就绪",
+                            device_state.telemetry.modules.audio_ready ? "就绪" : "未就绪");
         state_changes.audio_changed = true;
     }
 
@@ -574,11 +576,11 @@ void Device::initializeGSM()
     while (!air780eg.begin(&Serial1, 115200, GSM_RX_PIN, GSM_TX_PIN, GSM_EN, config))
     {
         Serial.println("[GSM] ❌ Air780EG基础初始化失败");
-        device_state.gsmReady = false;
+        device_state.telemetry.modules.gsm_ready = false;
         delay(1000);
     }
     Serial.println("[GSM] ✅ Air780EG基础初始化成功");
-    device_state.gsmReady = true;
+    device_state.telemetry.modules.gsm_ready = true;
 
 #ifdef DISABLE_MQTT
     Serial.println("MQTT功能已禁用");
@@ -620,10 +622,9 @@ bool Device::initializeMQTT()
     // 设置连接状态回调
     air780eg.getMQTT().setConnectionCallback(mqttConnectionCallback);
 
-    // 添加定时任务
-    air780eg.getMQTT().addScheduledTask("device_status", "vehicle/v1/" + device_state.device_id + "/telemetry/device", getDeviceStatusJSON, MQTT_DEVICE_STATUS_PUBLISH_INTERVAL, 0, false);
-    air780eg.getMQTT().addScheduledTask("location", "vehicle/v1/" + device_state.device_id + "/telemetry/location", getLocationJSON, MQTT_GPS_PUBLISH_INTERVAL, 0, false);
-    // air780eg.getMQTT().addScheduledTask("system_stats", mqttTopics.getSystemStatusTopic(), getSystemStatsJSON, 60, 0, false);
+    // 添加统一遥测任务
+    air780eg.getMQTT().addScheduledTask("telemetry", "vehicle/v1/" + device_state.device_id + "/telemetry", 
+        []() { return device.getCombinedTelemetryJSON(); }, MQTT_GPS_PUBLISH_INTERVAL, 0, false);
 
     // // 连接到MQTT服务器
     // if (!air780eg.getMQTT().connect())
@@ -640,4 +641,159 @@ bool Device::initializeMQTT()
 
 #endif
     return false;
+}
+
+// 数据更新方法实现
+void Device::updateLocationData(double lat, double lng, float alt, float speed, 
+                               float heading, uint8_t sats, float hdop) {
+    device_state.telemetry.location.lat = lat;
+    device_state.telemetry.location.lng = lng;
+    device_state.telemetry.location.altitude = alt;
+    device_state.telemetry.location.speed = speed;
+    device_state.telemetry.location.heading = heading;
+    device_state.telemetry.location.satellites = sats;
+    device_state.telemetry.location.hdop = hdop;
+    device_state.telemetry.location.valid = true;
+    device_state.telemetry.location.timestamp = millis();
+}
+
+void Device::updateIMUData(float ax, float ay, float az, float gx, float gy, float gz,
+                          float roll, float pitch, float yaw) {
+    device_state.telemetry.sensors.imu.accel_x = ax;
+    device_state.telemetry.sensors.imu.accel_y = ay;
+    device_state.telemetry.sensors.imu.accel_z = az;
+    device_state.telemetry.sensors.imu.gyro_x = gx;
+    device_state.telemetry.sensors.imu.gyro_y = gy;
+    device_state.telemetry.sensors.imu.gyro_z = gz;
+    device_state.telemetry.sensors.imu.roll = roll;
+    device_state.telemetry.sensors.imu.pitch = pitch;
+    device_state.telemetry.sensors.imu.yaw = yaw;
+    device_state.telemetry.sensors.imu.valid = true;
+    device_state.telemetry.sensors.imu.timestamp = millis();
+}
+
+void Device::updateCompassData(float heading, float mx, float my, float mz) {
+    device_state.telemetry.sensors.compass.heading = heading;
+    device_state.telemetry.sensors.compass.mag_x = mx;
+    device_state.telemetry.sensors.compass.mag_y = my;
+    device_state.telemetry.sensors.compass.mag_z = mz;
+    device_state.telemetry.sensors.compass.valid = true;
+    device_state.telemetry.sensors.compass.timestamp = millis();
+}
+
+void Device::updateBatteryData(int voltage, int percentage, bool charging, bool ext_power) {
+    device_state.telemetry.system.battery_voltage = voltage;
+    device_state.telemetry.system.battery_percentage = percentage;
+    device_state.telemetry.system.is_charging = charging;
+    device_state.telemetry.system.external_power = ext_power;
+}
+
+void Device::updateSystemData(int signal, uint32_t uptime, uint32_t free_heap) {
+    device_state.telemetry.system.signal_strength = signal;
+    device_state.telemetry.system.uptime = uptime;
+    device_state.telemetry.system.free_heap = free_heap;
+}
+
+void Device::updateModuleStatus(const char* module, bool ready) {
+    if (strcmp(module, "wifi") == 0) {
+        device_state.telemetry.modules.wifi_ready = ready;
+    } else if (strcmp(module, "ble") == 0) {
+        device_state.telemetry.modules.ble_ready = ready;
+    } else if (strcmp(module, "gsm") == 0) {
+        device_state.telemetry.modules.gsm_ready = ready;
+    } else if (strcmp(module, "gnss") == 0) {
+        device_state.telemetry.modules.gnss_ready = ready;
+    } else if (strcmp(module, "imu") == 0) {
+        device_state.telemetry.modules.imu_ready = ready;
+    } else if (strcmp(module, "compass") == 0) {
+        device_state.telemetry.modules.compass_ready = ready;
+    } else if (strcmp(module, "sd") == 0) {
+        device_state.telemetry.modules.sd_ready = ready;
+    } else if (strcmp(module, "audio") == 0) {
+        device_state.telemetry.modules.audio_ready = ready;
+    }
+}
+
+String Device::getCombinedTelemetryJSON() {
+    DynamicJsonDocument doc(2048);
+    
+    // 设备信息
+    doc["device_id"] = device_state.device_id;
+    doc["timestamp"] = millis();
+    doc["firmware"] = device_state.device_firmware_version;
+    doc["hardware"] = device_state.device_hardware_version;
+    doc["power_mode"] = device_state.power_mode;
+    
+    // 位置数据
+    if (device_state.telemetry.location.valid) {
+        JsonObject location = doc.createNestedObject("location");
+        location["lat"] = device_state.telemetry.location.lat;
+        location["lng"] = device_state.telemetry.location.lng;
+        location["alt"] = device_state.telemetry.location.altitude;
+        location["speed"] = device_state.telemetry.location.speed;
+        location["course"] = device_state.telemetry.location.heading;
+        location["satellites"] = device_state.telemetry.location.satellites;
+        location["hdop"] = device_state.telemetry.location.hdop;
+        location["timestamp"] = device_state.telemetry.location.timestamp;
+    }
+    
+    // 传感器数据
+    JsonObject sensors = doc.createNestedObject("sensors");
+    
+    // IMU数据
+    if (device_state.telemetry.sensors.imu.valid) {
+        JsonObject imu = sensors.createNestedObject("imu");
+        imu["accel_x"] = device_state.telemetry.sensors.imu.accel_x;
+        imu["accel_y"] = device_state.telemetry.sensors.imu.accel_y;
+        imu["accel_z"] = device_state.telemetry.sensors.imu.accel_z;
+        imu["gyro_x"] = device_state.telemetry.sensors.imu.gyro_x;
+        imu["gyro_y"] = device_state.telemetry.sensors.imu.gyro_y;
+        imu["gyro_z"] = device_state.telemetry.sensors.imu.gyro_z;
+        imu["roll"] = device_state.telemetry.sensors.imu.roll;
+        imu["pitch"] = device_state.telemetry.sensors.imu.pitch;
+        imu["yaw"] = device_state.telemetry.sensors.imu.yaw;
+        imu["timestamp"] = device_state.telemetry.sensors.imu.timestamp;
+    }
+    
+    // 罗盘数据
+    if (device_state.telemetry.sensors.compass.valid) {
+        JsonObject compass = sensors.createNestedObject("compass");
+        compass["heading"] = device_state.telemetry.sensors.compass.heading;
+        compass["mag_x"] = device_state.telemetry.sensors.compass.mag_x;
+        compass["mag_y"] = device_state.telemetry.sensors.compass.mag_y;
+        compass["mag_z"] = device_state.telemetry.sensors.compass.mag_z;
+        compass["timestamp"] = device_state.telemetry.sensors.compass.timestamp;
+    }
+    
+    // 系统状态
+    JsonObject system = doc.createNestedObject("system");
+    system["battery"] = device_state.telemetry.system.battery_voltage;
+    system["battery_pct"] = device_state.telemetry.system.battery_percentage;
+    system["charging"] = device_state.telemetry.system.is_charging;
+    system["external_power"] = device_state.telemetry.system.external_power;
+    system["signal"] = device_state.telemetry.system.signal_strength;
+    system["uptime"] = device_state.telemetry.system.uptime;
+    system["free_heap"] = device_state.telemetry.system.free_heap;
+    
+    // 模块状态
+    JsonObject modules = doc.createNestedObject("modules");
+    modules["wifi"] = device_state.telemetry.modules.wifi_ready;
+    modules["ble"] = device_state.telemetry.modules.ble_ready;
+    modules["gsm"] = device_state.telemetry.modules.gsm_ready;
+    modules["gnss"] = device_state.telemetry.modules.gnss_ready;
+    modules["imu"] = device_state.telemetry.modules.imu_ready;
+    modules["compass"] = device_state.telemetry.modules.compass_ready;
+    modules["sd"] = device_state.telemetry.modules.sd_ready;
+    modules["audio"] = device_state.telemetry.modules.audio_ready;
+    
+    // SD卡信息
+    if (device_state.telemetry.modules.sd_ready) {
+        JsonObject storage = doc.createNestedObject("storage");
+        storage["size_mb"] = device_state.sdCardSizeMB;
+        storage["free_mb"] = device_state.sdCardFreeMB;
+    }
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
 }

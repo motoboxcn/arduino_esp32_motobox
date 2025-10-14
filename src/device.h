@@ -30,33 +30,77 @@
 
 typedef struct
 {
+    // 设备基础信息
     String device_id; // 设备ID
     String device_firmware_version; // 固件版本
     String device_hardware_version; // 硬件版本
     int sleep_time; // 休眠时间 单位：秒
     int led_mode; // LED模式 0:关闭 1:常亮 2:单闪 3:双闪 4:慢闪 5:快闪 6:呼吸 7:5秒闪烁
-    int battery_voltage;
-    int battery_percentage;
-    bool is_charging;          // 新增：充电状态
-    bool external_power;       // 新增：外部电源接入状态（车辆电门）
-    bool wifiConnected; // WiFi连接状态
-    bool bleConnected; // BLE连接状态
-    bool imuReady; // IMU准备状态
-    bool compassReady;  // 罗盘准备状态
-    bool gsmReady; // GSM准备状态
-    bool lbsReady; // LBS准备状态
-    bool gnssReady; // GNSS准备状态
     
-    // GPS/GNSS数据字段
-    double latitude;    // 纬度
-    double longitude;   // 经度
-    int satellites;     // 卫星数量
-    int signalStrength; // GSM信号强度
+    // 遥测数据 - 嵌套结构
+    struct {
+        // 位置数据
+        struct {
+            double lat;
+            double lng;
+            float altitude;
+            float speed;
+            float heading;
+            uint8_t satellites;
+            float hdop;
+            bool valid;
+            uint32_t timestamp;
+        } location;
+        
+        // 传感器数据
+        struct {
+            // IMU数据
+            struct {
+                float accel_x, accel_y, accel_z;
+                float gyro_x, gyro_y, gyro_z;
+                float roll, pitch, yaw;
+                bool valid;
+                uint32_t timestamp;
+            } imu;
+            
+            // 罗盘数据
+            struct {
+                float heading;
+                float mag_x, mag_y, mag_z;
+                bool valid;
+                uint32_t timestamp;
+            } compass;
+        } sensors;
+        
+        // 系统状态
+        struct {
+            int battery_voltage;
+            int battery_percentage;
+            bool is_charging;
+            bool external_power;
+            int signal_strength;
+            uint32_t uptime;
+            uint32_t free_heap;
+        } system;
+        
+        // 模块状态
+        struct {
+            bool wifi_ready;
+            bool ble_ready;
+            bool gsm_ready;
+            bool gnss_ready;
+            bool imu_ready;
+            bool compass_ready;
+            bool sd_ready;
+            bool audio_ready;
+        } modules;
+    } telemetry;
     
-    bool sdCardReady; // SD卡准备状态
+    // SD卡信息（低频更新）
     uint64_t sdCardSizeMB; // SD卡大小(MB)
     uint64_t sdCardFreeMB; // SD卡剩余空间(MB)
-    bool audioReady; // 音频系统准备状态
+    
+    // 功耗模式
     int power_mode; // 功耗模式 0:休眠 1:基本 2:正常 3:运动
 } device_state_t;
 
@@ -107,6 +151,19 @@ public:
     void setWelcomeVoiceType(int voiceType);
     void playWelcomeVoice();
     String getWelcomeVoiceInfo();
+    
+    // 数据更新接口
+    void updateLocationData(double lat, double lng, float alt, float speed, 
+                           float heading, uint8_t sats, float hdop);
+    void updateIMUData(float ax, float ay, float az, float gx, float gy, float gz,
+                      float roll, float pitch, float yaw);
+    void updateCompassData(float heading, float mx, float my, float mz);
+    void updateBatteryData(int voltage, int percentage, bool charging, bool ext_power);
+    void updateSystemData(int signal, uint32_t uptime, uint32_t free_heap);
+    void updateModuleStatus(const char* module, bool ready);
+    
+    // 统一MQTT数据获取
+    String getCombinedTelemetryJSON();
     
 private:
 };
