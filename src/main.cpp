@@ -309,21 +309,9 @@ void loop()
   // BLE数据更新
   bleDataProvider.update();
   
-  // 如果有客户端连接，更新BLE特征值
-  if (bleManager.isClientConnected()) {
-    bleManager.updateGPSData(bleDataProvider.getGPSData());
-    bleManager.updateBatteryData(bleDataProvider.getBatteryData());
-    bleManager.updateIMUData(bleDataProvider.getIMUData());
-    
-    // 更新融合定位数据
-    if (bleDataProvider.isFusionDataValid()) {
-      bleManager.updateFusionData(bleDataProvider.getFusionData());
-    }
-    
-    // 更新系统状态数据
-    if (bleDataProvider.isSystemStatusValid()) {
-      bleManager.updateSystemStatus(bleDataProvider.getSystemStatus());
-    }
+  // 如果有客户端连接，更新BLE遥测数据
+  if (bleManager.isClientConnected() && bleDataProvider.isDataValid()) {
+    bleManager.updateTelemetryData(*bleDataProvider.getDeviceState());
   }
   
   // BLE管理器更新

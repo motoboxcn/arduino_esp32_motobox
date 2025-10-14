@@ -131,11 +131,7 @@
 #ifdef ENABLE_BLE
 #define BLE_DEVICE_NAME_PREFIX            "MotoBox-"          // BLE设备名称前缀
 #define BLE_SERVICE_UUID                  "12345678-1234-1234-1234-123456789ABC"  // 主服务UUID
-#define BLE_CHAR_GPS_UUID                 "12345678-1234-1234-1234-123456789ABD"  // GPS位置特征UUID
-#define BLE_CHAR_BATTERY_UUID             "12345678-1234-1234-1234-123456789ABE"  // 电池电量特征UUID
-#define BLE_CHAR_IMU_UUID                 "12345678-1234-1234-1234-123456789ABF"  // IMU倾角特征UUID
-#define BLE_CHAR_FUSION_UUID              "12345678-1234-1234-1234-123456789AC0"  // 融合定位特征UUID
-#define BLE_CHAR_SYSTEM_UUID              "12345678-1234-1234-1234-123456789AC1"  // 系统状态特征UUID
+#define BLE_CHAR_TELEMETRY_UUID           "12345678-1234-1234-1234-123456789ABD"  // 统一遥测数据特征UUID
 #define BLE_UPDATE_INTERVAL               200                 // BLE数据更新间隔（毫秒，5Hz）
 #define BLE_FUSION_UPDATE_INTERVAL        200                 // 融合数据更新间隔（毫秒，5Hz）
 #define BLE_SYSTEM_UPDATE_INTERVAL        2000                // 系统状态更新间隔（毫秒）

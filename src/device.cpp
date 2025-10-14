@@ -416,7 +416,7 @@ void Device::begin()
 #ifdef ENABLE_BLE
     // 设置BLE数据源（在所有模块初始化完成后）
     Serial.println("[BLE] 设置数据源...");
-    bleDataProvider.setDataSources(&air780eg, &imu, &bat);
+    bleDataProvider.setDeviceState(&device_state);
     Serial.println("[BLE] ✅ 数据源设置完成");
 #endif
 }
