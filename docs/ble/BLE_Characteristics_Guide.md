@@ -17,7 +17,7 @@ MotoBox ESP32设备通过BLE（蓝牙低功耗）提供三个特征值，用于�
 ### 基本信息
 - **UUID**: `12345678-1234-1234-1234-123456789ABD`
 - **属性**: READ + NOTIFY
-- **更新频率**: 5Hz (每200ms)
+- **更新频率**: 1Hz (每1秒)
 - **用途**: 传输完整的设备状态信息，用于实时监控
 
 ### 数据格式
@@ -181,7 +181,7 @@ MotoBox ESP32设备通过BLE（蓝牙低功耗）提供三个特征值，用于�
 ### 基本信息
 - **UUID**: `12345678-1234-1234-1234-123456789ABF`
 - **属性**: READ + NOTIFY
-- **更新频率**: 1Hz (每1秒)
+- **更新频率**: 5Hz (每200ms)
 - **用途**: 传输融合定位系统的详细调试信息
 
 ### 数据格式
@@ -283,13 +283,13 @@ MotoBox ESP32设备通过BLE（蓝牙低功耗）提供三个特征值，用于�
 根据需求订阅相应的特征值：
 
 ```javascript
-// 订阅遥测数据（5Hz更新）
+// 订阅遥测数据（1Hz更新）
 await characteristic1.startNotifications();
 
 // 订阅调试数据（按需更新）
 await characteristic2.startNotifications();
 
-// 订阅融合调试数据（1Hz更新）
+// 订阅融合调试数据（5Hz更新）
 await characteristic3.startNotifications();
 ```
 
@@ -354,4 +354,3 @@ characteristic3.addEventListener('characteristicvaluechanged', (event) => {
 
 - **文档版本**: v1.0
 - **固件版本**: v4.2.0+502
-- **最后更新**: 2024年12月

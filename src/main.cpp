@@ -309,14 +309,18 @@ void loop()
   
   // 如果有客户端连接，更新BLE数据
   if (bleManager.isClientConnected()) {
-    // 更新遥测数据
-    if (bleDataProvider.isDataValid()) {
-      bleManager.updateTelemetryData(*bleDataProvider.getDeviceState());
+    // 更新遥测数据（每1秒更新一次）
+    static unsigned long lastTelemetryUpdate = 0;
+    if (millis() - lastTelemetryUpdate > 1000) {
+      if (bleDataProvider.isDataValid()) {
+        bleManager.updateTelemetryData(*bleDataProvider.getDeviceState());
+      }
+      lastTelemetryUpdate = millis();
     }
     
-    // 更新融合调试数据（每1秒更新一次）
+    // 更新融合调试数据（每200ms更新一次，5Hz）
     static unsigned long lastFusionDebugUpdate = 0;
-    if (millis() - lastFusionDebugUpdate > 1000) {
+    if (millis() - lastFusionDebugUpdate > 200) {
       String fusionDebugData = bleDataProvider.generateFusionDebugData();
       bleManager.updateFusionDebugData(fusionDebugData);
       lastFusionDebugUpdate = millis();
