@@ -1,5 +1,5 @@
-#ifndef BLE_MANAGER_SIMPLE_H
-#define BLE_MANAGER_SIMPLE_H
+#ifndef BLE_MANAGER_MODULAR_H
+#define BLE_MANAGER_MODULAR_H
 
 #include <Arduino.h>
 #include "config.h"
@@ -38,8 +38,8 @@ public:
 };
 
 /**
- * @brief 简化的BLE管理器类
- * 使用单一特征值传输完整的遥测数据
+ * @brief 模块化BLE管理器类
+ * 使用四个独立特征值分别传输GPS、IMU、罗盘和系统数据
  */
 class BLEManager {
 private:
@@ -48,10 +48,11 @@ private:
     BLEServer* pServer;
     BLEService* pService;
     
-    // 特征值
-    BLECharacteristic* pTelemetryCharacteristic;  // 遥测数据特征值
-    BLECharacteristic* pDebugCharacteristic;      // 调试数据特征值
-    BLECharacteristic* pFusionDebugCharacteristic; // 融合数据调试特征值
+    // 模块化特征值
+    BLECharacteristic* pGPSCharacteristic;      // GPS位置数据特征值
+    BLECharacteristic* pIMUCharacteristic;      // IMU传感器数据特征值
+    BLECharacteristic* pCompassCharacteristic;  // 罗盘数据特征值
+    BLECharacteristic* pSystemCharacteristic;   // 系统状态数据特征值
     
     // 回调对象
     MotoBoxBLEServerCallbacks* serverCallbacks;
@@ -59,20 +60,37 @@ private:
     
     // 状态管理
     bool isInitialized;
-    unsigned long lastUpdateTime;
+    
+    // 更新时间跟踪
+    unsigned long lastGPSUpdateTime;
+    unsigned long lastIMUUpdateTime;
+    unsigned long lastCompassUpdateTime;
+    unsigned long lastSystemUpdateTime;
     
     // 设备名称
     String deviceName;
     
-    // 数据缓存
-    String lastTelemetryData;
-    String lastDebugData;
-    String lastFusionDebugData;
+    // 数据缓存（避免重复发送相同数据）
+    String lastGPSData;
+    String lastIMUData;
+    String lastCompassData;
+    String lastSystemData;
     
     // 内部方法
     void createService();
     void createCharacteristics();
-    String telemetryDataToJSON(const ble_device_state_t& deviceState);
+    
+    // JSON数据生成方法
+    String gpsDataToJSON(const ble_gps_data_t& gpsData);
+    String imuDataToJSON(const ble_imu_data_t& imuData);
+    String compassDataToJSON(const ble_compass_data_t& compassData);
+    String systemDataToJSON(const ble_system_data_t& systemData);
+    
+    // 从完整设备状态提取模块数据
+    ble_gps_data_t extractGPSData(const ble_device_state_t& deviceState);
+    ble_imu_data_t extractIMUData(const ble_device_state_t& deviceState);
+    ble_compass_data_t extractCompassData(const ble_device_state_t& deviceState);
+    ble_system_data_t extractSystemData(const ble_device_state_t& deviceState);
 
 public:
     BLEManager();
@@ -96,10 +114,14 @@ public:
     void startAdvertising();
     void stopAdvertising();
     
-    // 数据更新
-    void updateTelemetryData(const ble_device_state_t& deviceState);
-    void updateDebugData(const String& debugMessage);
-    void updateFusionDebugData(const String& fusionDebugMessage);
+    // 模块化数据更新方法
+    void updateGPSData(const ble_gps_data_t& gpsData);
+    void updateIMUData(const ble_imu_data_t& imuData);
+    void updateCompassData(const ble_compass_data_t& compassData);
+    void updateSystemData(const ble_system_data_t& systemData);
+    
+    // 统一数据更新方法（从完整设备状态提取各模块数据）
+    void updateAllData(const ble_device_state_t& deviceState);
     
     // 调试和状态
     void setDebug(bool enable);
@@ -111,4 +133,4 @@ extern BLEManager bleManager;
 
 #endif // ENABLE_BLE
 
-#endif // BLE_MANAGER_SIMPLE_H
+#endif // BLE_MANAGER_MODULAR_H

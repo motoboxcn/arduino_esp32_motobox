@@ -55,19 +55,24 @@ void MotoBoxBLECharacteristicCallbacks::onWrite(BLECharacteristic* pCharacterist
 BLEManager::BLEManager() 
     : pServer(nullptr)
     , pService(nullptr)
-    , pTelemetryCharacteristic(nullptr)
-    , pDebugCharacteristic(nullptr)
-    , pFusionDebugCharacteristic(nullptr)
+    , pGPSCharacteristic(nullptr)
+    , pIMUCharacteristic(nullptr)
+    , pCompassCharacteristic(nullptr)
+    , pSystemCharacteristic(nullptr)
     , serverCallbacks(nullptr)
     , charCallbacks(nullptr)
     , isInitialized(false)
-    , lastUpdateTime(0)
+    , lastGPSUpdateTime(0)
+    , lastIMUUpdateTime(0)
+    , lastCompassUpdateTime(0)
+    , lastSystemUpdateTime(0)
     , deviceName("")
     , isConnected(false)
     , isAdvertising(false)
-    , lastTelemetryData("")
-    , lastDebugData("")
-    , lastFusionDebugData("")
+    , lastGPSData("")
+    , lastIMUData("")
+    , lastCompassData("")
+    , lastSystemData("")
 {
 }
 
@@ -184,35 +189,43 @@ void BLEManager::createCharacteristics() {
     // 创建特征值回调对象
     charCallbacks = new MotoBoxBLECharacteristicCallbacks();
     
-    // 创建统一遥测特征值
-    pTelemetryCharacteristic = pService->createCharacteristic(
-        BLE_CHAR_TELEMETRY_UUID,
+    // 创建GPS位置数据特征值
+    pGPSCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_GPS_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    pTelemetryCharacteristic->setCallbacks(charCallbacks);
-    pTelemetryCharacteristic->addDescriptor(new BLE2902());
+    pGPSCharacteristic->setCallbacks(charCallbacks);
+    pGPSCharacteristic->addDescriptor(new BLE2902());
     
-    // 创建调试数据特征值
-    pDebugCharacteristic = pService->createCharacteristic(
-        BLE_CHAR_DEBUG_UUID,
+    // 创建IMU传感器数据特征值
+    pIMUCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_IMU_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    pDebugCharacteristic->setCallbacks(charCallbacks);
-    pDebugCharacteristic->addDescriptor(new BLE2902());
+    pIMUCharacteristic->setCallbacks(charCallbacks);
+    pIMUCharacteristic->addDescriptor(new BLE2902());
     
-    // 创建融合数据调试特征值
-    pFusionDebugCharacteristic = pService->createCharacteristic(
-        BLE_CHAR_FUSION_DEBUG_UUID,
+    // 创建罗盘数据特征值
+    pCompassCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_COMPASS_UUID,
         BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
     );
-    pFusionDebugCharacteristic->setCallbacks(charCallbacks);
-    pFusionDebugCharacteristic->addDescriptor(new BLE2902());
+    pCompassCharacteristic->setCallbacks(charCallbacks);
+    pCompassCharacteristic->addDescriptor(new BLE2902());
+    
+    // 创建系统状态数据特征值
+    pSystemCharacteristic = pService->createCharacteristic(
+        BLE_CHAR_SYSTEM_UUID,
+        BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY
+    );
+    pSystemCharacteristic->setCallbacks(charCallbacks);
+    pSystemCharacteristic->addDescriptor(new BLE2902());
     
     // 启动服务
     pService->start();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.println("[BLE] ✅ BLE特征值创建成功（遥测数据 + 调试数据 + 融合调试数据）");
+    Serial.println("[BLE] ✅ 模块化BLE特征值创建成功（GPS + IMU + 罗盘 + 系统状态）");
     #endif
 }
 
@@ -263,161 +276,413 @@ void BLEManager::update() {
         return;
     }
     
-    unsigned long currentTime = millis();
-    if (currentTime - lastUpdateTime < BLE_UPDATE_INTERVAL) {
+    // 模块化更新不需要在这里处理
+    // 各模块数据通过外部调用相应的update方法实现
+    // 这里可以添加连接状态检查等逻辑
+}
+
+void BLEManager::updateGPSData(const ble_gps_data_t& gpsData) {
+    if (!isInitialized || !pGPSCharacteristic) {
         return;
     }
     
-    lastUpdateTime = currentTime;
-    
-    // 这里可以添加定期数据更新逻辑
-    // 目前数据更新通过外部调用updateTelemetryData方法实现
-}
-
-void BLEManager::updateTelemetryData(const ble_device_state_t& deviceState) {
-    if (!isInitialized || !pTelemetryCharacteristic) {
+    unsigned long currentTime = millis();
+    if (currentTime - lastGPSUpdateTime < BLE_GPS_UPDATE_INTERVAL) {
         return;
     }
     
     // 生成JSON数据
-    String jsonData = telemetryDataToJSON(deviceState);
+    String jsonData = gpsDataToJSON(gpsData);
     
     // 检查数据是否有变化
-    if (jsonData == lastTelemetryData) {
+    if (jsonData == lastGPSData) {
         return;
     }
     
-    lastTelemetryData = jsonData;
+    lastGPSData = jsonData;
+    lastGPSUpdateTime = currentTime;
     
     // 设置特征值并通知
-    pTelemetryCharacteristic->setValue(jsonData.c_str());
-    pTelemetryCharacteristic->notify();
+    pGPSCharacteristic->setValue(jsonData.c_str());
+    pGPSCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] 遥测数据已更新: %d 字节\n", jsonData.length());
+    Serial.printf("[BLE] GPS数据已更新: %d 字节\n", jsonData.length());
     #endif
 }
 
-void BLEManager::updateDebugData(const String& debugMessage) {
-    if (!isInitialized || !pDebugCharacteristic) {
+void BLEManager::updateIMUData(const ble_imu_data_t& imuData) {
+    if (!isInitialized || !pIMUCharacteristic) {
         return;
     }
+    
+    unsigned long currentTime = millis();
+    if (currentTime - lastIMUUpdateTime < BLE_IMU_UPDATE_INTERVAL) {
+        return;
+    }
+    
+    // 生成JSON数据
+    String jsonData = imuDataToJSON(imuData);
     
     // 检查数据是否有变化
-    if (debugMessage == lastDebugData) {
+    if (jsonData == lastIMUData) {
         return;
     }
     
-    lastDebugData = debugMessage;
+    lastIMUData = jsonData;
+    lastIMUUpdateTime = currentTime;
     
     // 设置特征值并通知
-    pDebugCharacteristic->setValue(debugMessage.c_str());
-    pDebugCharacteristic->notify();
+    pIMUCharacteristic->setValue(jsonData.c_str());
+    pIMUCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] 调试数据已更新: %d 字节\n", debugMessage.length());
+    Serial.printf("[BLE] IMU数据已更新: %d 字节\n", jsonData.length());
     #endif
 }
 
-void BLEManager::updateFusionDebugData(const String& fusionDebugMessage) {
-    if (!isInitialized || !pFusionDebugCharacteristic) {
+void BLEManager::updateCompassData(const ble_compass_data_t& compassData) {
+    if (!isInitialized || !pCompassCharacteristic) {
         return;
     }
+    
+    unsigned long currentTime = millis();
+    if (currentTime - lastCompassUpdateTime < BLE_COMPASS_UPDATE_INTERVAL) {
+        return;
+    }
+    
+    // 生成JSON数据
+    String jsonData = compassDataToJSON(compassData);
     
     // 检查数据是否有变化
-    if (fusionDebugMessage == lastFusionDebugData) {
+    if (jsonData == lastCompassData) {
         return;
     }
     
-    lastFusionDebugData = fusionDebugMessage;
+    lastCompassData = jsonData;
+    lastCompassUpdateTime = currentTime;
     
     // 设置特征值并通知
-    pFusionDebugCharacteristic->setValue(fusionDebugMessage.c_str());
-    pFusionDebugCharacteristic->notify();
+    pCompassCharacteristic->setValue(jsonData.c_str());
+    pCompassCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] 融合调试数据已更新: %d 字节\n", fusionDebugMessage.length());
+    Serial.printf("[BLE] 罗盘数据已更新: %d 字节\n", jsonData.length());
     #endif
 }
 
-String BLEManager::telemetryDataToJSON(const ble_device_state_t& deviceState) {
-    StaticJsonDocument<2048> doc;
-    
-    // 设备基础信息
-    doc["device_id"] = deviceState.device_id;
-    doc["timestamp"] = millis();
-    doc["firmware"] = deviceState.firmware;
-    doc["hardware"] = deviceState.hardware;
-    doc["power_mode"] = deviceState.power_mode;
-    
-    // 位置数据
-    if (deviceState.location.valid) {
-        JsonObject location = doc.createNestedObject("location");
-        location["lat"] = deviceState.location.lat;
-        location["lng"] = deviceState.location.lng;
-        location["alt"] = deviceState.location.altitude;
-        location["speed"] = deviceState.location.speed;
-        location["course"] = deviceState.location.heading;
-        location["satellites"] = deviceState.location.satellites;
-        location["hdop"] = deviceState.location.hdop;
-        location["timestamp"] = deviceState.location.timestamp;
+void BLEManager::updateSystemData(const ble_system_data_t& systemData) {
+    if (!isInitialized || !pSystemCharacteristic) {
+        return;
     }
     
-    // 传感器数据
-    JsonObject sensors = doc.createNestedObject("sensors");
-    
-    // IMU数据
-    if (deviceState.sensors.imu.valid) {
-        JsonObject imu = sensors.createNestedObject("imu");
-        imu["accel_x"] = deviceState.sensors.imu.accel_x;
-        imu["accel_y"] = deviceState.sensors.imu.accel_y;
-        imu["accel_z"] = deviceState.sensors.imu.accel_z;
-        imu["gyro_x"] = deviceState.sensors.imu.gyro_x;
-        imu["gyro_y"] = deviceState.sensors.imu.gyro_y;
-        imu["gyro_z"] = deviceState.sensors.imu.gyro_z;
-        imu["roll"] = deviceState.sensors.imu.roll;
-        imu["pitch"] = deviceState.sensors.imu.pitch;
-        imu["yaw"] = deviceState.sensors.imu.yaw;
-        imu["timestamp"] = deviceState.sensors.imu.timestamp;
+    unsigned long currentTime = millis();
+    if (currentTime - lastSystemUpdateTime < BLE_SYSTEM_UPDATE_INTERVAL) {
+        return;
     }
     
-    // 罗盘数据
-    if (deviceState.sensors.compass.valid) {
-        JsonObject compass = sensors.createNestedObject("compass");
-        compass["heading"] = deviceState.sensors.compass.heading;
-        compass["mag_x"] = deviceState.sensors.compass.mag_x;
-        compass["mag_y"] = deviceState.sensors.compass.mag_y;
-        compass["mag_z"] = deviceState.sensors.compass.mag_z;
-        compass["timestamp"] = deviceState.sensors.compass.timestamp;
+    // 生成JSON数据
+    String jsonData = systemDataToJSON(systemData);
+    
+    // 检查数据是否有变化
+    if (jsonData == lastSystemData) {
+        return;
     }
     
-    // 系统状态
-    JsonObject system = doc.createNestedObject("system");
-    system["battery"] = deviceState.system.battery_voltage;
-    system["battery_pct"] = deviceState.system.battery_percentage;
-    system["charging"] = deviceState.system.is_charging;
-    system["external_power"] = deviceState.system.external_power;
-    system["signal"] = deviceState.system.signal_strength;
-    system["uptime"] = deviceState.system.uptime;
-    system["free_heap"] = deviceState.system.free_heap;
+    lastSystemData = jsonData;
+    lastSystemUpdateTime = currentTime;
     
-    // 模块状态
-    JsonObject modules = doc.createNestedObject("modules");
-    modules["wifi"] = deviceState.modules.wifi_ready;
-    modules["ble"] = deviceState.modules.ble_ready;
-    modules["gsm"] = deviceState.modules.gsm_ready;
-    modules["gnss"] = deviceState.modules.gnss_ready;
-    modules["imu"] = deviceState.modules.imu_ready;
-    modules["compass"] = deviceState.modules.compass_ready;
-    modules["sd"] = deviceState.modules.sd_ready;
-    modules["audio"] = deviceState.modules.audio_ready;
+    // 设置特征值并通知
+    pSystemCharacteristic->setValue(jsonData.c_str());
+    pSystemCharacteristic->notify();
     
-    // 存储信息
-    JsonObject storage = doc.createNestedObject("storage");
-    storage["size_mb"] = deviceState.storage.size_mb;
-    storage["free_mb"] = deviceState.storage.free_mb;
+    #ifdef BLE_DEBUG_ENABLED
+    Serial.printf("[BLE] 系统数据已更新: %d 字节\n", jsonData.length());
+    #endif
+}
+
+void BLEManager::updateAllData(const ble_device_state_t& deviceState) {
+    if (!isInitialized || !isConnected) {
+        return;
+    }
+    
+    // 从完整设备状态提取各模块数据并更新
+    updateGPSData(extractGPSData(deviceState));
+    updateIMUData(extractIMUData(deviceState));
+    updateCompassData(extractCompassData(deviceState));
+    updateSystemData(extractSystemData(deviceState));
+}
+
+// ==================== JSON数据生成方法 ====================
+
+String BLEManager::gpsDataToJSON(const ble_gps_data_t& gpsData) {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = gpsData.device_id;
+    doc["timestamp"] = gpsData.timestamp;
+    
+    JsonObject location = doc.createNestedObject("location");
+    location["lat"] = gpsData.location.lat;
+    location["lng"] = gpsData.location.lng;
+    location["altitude"] = gpsData.location.altitude;
+    location["speed"] = gpsData.location.speed;
+    location["heading"] = gpsData.location.heading;
+    location["satellites"] = gpsData.location.satellites;
+    location["hdop"] = gpsData.location.hdop;
+    location["vdop"] = gpsData.location.vdop;
+    location["pdop"] = gpsData.location.pdop;
+    location["fix_type"] = gpsData.location.fix_type;
+    location["timestamp"] = gpsData.location.timestamp;
+    location["valid"] = gpsData.location.valid;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["gnss_ready"] = gpsData.status.gnss_ready;
+    status["fix_quality"] = gpsData.status.fix_quality;
+    status["last_fix_age"] = gpsData.status.last_fix_age;
     
     return doc.as<String>();
+}
+
+String BLEManager::imuDataToJSON(const ble_imu_data_t& imuData) {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = imuData.device_id;
+    doc["timestamp"] = imuData.timestamp;
+    
+    JsonObject imu = doc.createNestedObject("imu");
+    
+    JsonObject accel = imu.createNestedObject("accel");
+    accel["x"] = imuData.imu.accel.x;
+    accel["y"] = imuData.imu.accel.y;
+    accel["z"] = imuData.imu.accel.z;
+    
+    JsonObject gyro = imu.createNestedObject("gyro");
+    gyro["x"] = imuData.imu.gyro.x;
+    gyro["y"] = imuData.imu.gyro.y;
+    gyro["z"] = imuData.imu.gyro.z;
+    
+    JsonObject attitude = imu.createNestedObject("attitude");
+    attitude["roll"] = imuData.imu.attitude.roll;
+    attitude["pitch"] = imuData.imu.attitude.pitch;
+    attitude["yaw"] = imuData.imu.attitude.yaw;
+    
+    imu["temperature"] = imuData.imu.temperature;
+    imu["timestamp"] = imuData.imu.timestamp;
+    imu["valid"] = imuData.imu.valid;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["imu_ready"] = imuData.status.imu_ready;
+    status["calibrated"] = imuData.status.calibrated;
+    status["motion_detected"] = imuData.status.motion_detected;
+    status["vibration_level"] = imuData.status.vibration_level;
+    
+    return doc.as<String>();
+}
+
+String BLEManager::compassDataToJSON(const ble_compass_data_t& compassData) {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = compassData.device_id;
+    doc["timestamp"] = compassData.timestamp;
+    
+    JsonObject compass = doc.createNestedObject("compass");
+    compass["heading"] = compassData.compass.heading;
+    
+    JsonObject magnetic = compass.createNestedObject("magnetic");
+    magnetic["x"] = compassData.compass.magnetic.x;
+    magnetic["y"] = compassData.compass.magnetic.y;
+    magnetic["z"] = compassData.compass.magnetic.z;
+    
+    compass["declination"] = compassData.compass.declination;
+    compass["inclination"] = compassData.compass.inclination;
+    compass["field_strength"] = compassData.compass.field_strength;
+    compass["timestamp"] = compassData.compass.timestamp;
+    compass["valid"] = compassData.compass.valid;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["compass_ready"] = compassData.status.compass_ready;
+    status["calibrated"] = compassData.status.calibrated;
+    status["interference"] = compassData.status.interference;
+    status["calibration_quality"] = compassData.status.calibration_quality;
+    
+    return doc.as<String>();
+}
+
+String BLEManager::systemDataToJSON(const ble_system_data_t& systemData) {
+    StaticJsonDocument<768> doc;
+    
+    doc["device_id"] = systemData.device_id;
+    doc["timestamp"] = systemData.timestamp;
+    doc["firmware"] = systemData.firmware;
+    doc["hardware"] = systemData.hardware;
+    doc["power_mode"] = systemData.power_mode;
+    
+    JsonObject system = doc.createNestedObject("system");
+    system["battery_voltage"] = systemData.system.battery_voltage;
+    system["battery_percentage"] = systemData.system.battery_percentage;
+    system["is_charging"] = systemData.system.is_charging;
+    system["external_power"] = systemData.system.external_power;
+    system["signal_strength"] = systemData.system.signal_strength;
+    system["uptime"] = systemData.system.uptime;
+    system["free_heap"] = systemData.system.free_heap;
+    system["cpu_usage"] = systemData.system.cpu_usage;
+    system["temperature"] = systemData.system.temperature;
+    
+    JsonObject modules = doc.createNestedObject("modules");
+    modules["wifi_ready"] = systemData.modules.wifi_ready;
+    modules["ble_ready"] = systemData.modules.ble_ready;
+    modules["gsm_ready"] = systemData.modules.gsm_ready;
+    modules["gnss_ready"] = systemData.modules.gnss_ready;
+    modules["imu_ready"] = systemData.modules.imu_ready;
+    modules["compass_ready"] = systemData.modules.compass_ready;
+    modules["sd_ready"] = systemData.modules.sd_ready;
+    modules["audio_ready"] = systemData.modules.audio_ready;
+    
+    JsonObject storage = doc.createNestedObject("storage");
+    storage["total_mb"] = systemData.storage.total_mb;
+    storage["free_mb"] = systemData.storage.free_mb;
+    storage["used_percentage"] = systemData.storage.used_percentage;
+    
+    JsonObject network = doc.createNestedObject("network");
+    network["wifi_connected"] = systemData.network.wifi_connected;
+    network["gsm_connected"] = systemData.network.gsm_connected;
+    network["ip_address"] = systemData.network.ip_address;
+    network["operator"] = systemData.network.operator_name;
+    
+    return doc.as<String>();
+}
+
+// ==================== 数据提取方法 ====================
+
+ble_gps_data_t BLEManager::extractGPSData(const ble_device_state_t& deviceState) {
+    ble_gps_data_t gpsData;
+    
+    gpsData.device_id = deviceState.device_id;
+    gpsData.timestamp = deviceState.timestamp;
+    
+    // 逐个复制位置数据字段
+    gpsData.location.lat = deviceState.location.lat;
+    gpsData.location.lng = deviceState.location.lng;
+    gpsData.location.altitude = deviceState.location.altitude;
+    gpsData.location.speed = deviceState.location.speed;
+    gpsData.location.heading = deviceState.location.heading;
+    gpsData.location.satellites = deviceState.location.satellites;
+    gpsData.location.hdop = deviceState.location.hdop;
+    gpsData.location.vdop = deviceState.location.vdop;
+    gpsData.location.pdop = deviceState.location.pdop;
+    gpsData.location.fix_type = deviceState.location.fix_type;
+    gpsData.location.valid = deviceState.location.valid;
+    gpsData.location.timestamp = deviceState.location.timestamp;
+    
+    // 设置状态信息
+    gpsData.status.gnss_ready = deviceState.modules.gnss_ready;
+    gpsData.status.fix_quality = deviceState.location.valid ? "3D_FIX" : "NO_FIX";
+    gpsData.status.last_fix_age = millis() - deviceState.location.timestamp;
+    
+    return gpsData;
+}
+
+ble_imu_data_t BLEManager::extractIMUData(const ble_device_state_t& deviceState) {
+    ble_imu_data_t imuData;
+    
+    imuData.device_id = deviceState.device_id;
+    imuData.timestamp = deviceState.timestamp;
+    
+    // 复制IMU数据
+    imuData.imu.accel.x = deviceState.sensors.imu.accel_x;
+    imuData.imu.accel.y = deviceState.sensors.imu.accel_y;
+    imuData.imu.accel.z = deviceState.sensors.imu.accel_z;
+    
+    imuData.imu.gyro.x = deviceState.sensors.imu.gyro_x;
+    imuData.imu.gyro.y = deviceState.sensors.imu.gyro_y;
+    imuData.imu.gyro.z = deviceState.sensors.imu.gyro_z;
+    
+    imuData.imu.attitude.roll = deviceState.sensors.imu.roll;
+    imuData.imu.attitude.pitch = deviceState.sensors.imu.pitch;
+    imuData.imu.attitude.yaw = deviceState.sensors.imu.yaw;
+    
+    imuData.imu.temperature = deviceState.sensors.imu.temperature;
+    imuData.imu.timestamp = deviceState.sensors.imu.timestamp;
+    imuData.imu.valid = deviceState.sensors.imu.valid;
+    
+    // 设置状态信息
+    imuData.status.imu_ready = deviceState.modules.imu_ready;
+    imuData.status.calibrated = true; // 假设已校准
+    imuData.status.motion_detected = false; // 需要根据实际情况设置
+    imuData.status.vibration_level = 0.0; // 需要根据实际情况计算
+    
+    return imuData;
+}
+
+ble_compass_data_t BLEManager::extractCompassData(const ble_device_state_t& deviceState) {
+    ble_compass_data_t compassData;
+    
+    compassData.device_id = deviceState.device_id;
+    compassData.timestamp = deviceState.timestamp;
+    
+    // 复制罗盘数据
+    compassData.compass.heading = deviceState.sensors.compass.heading;
+    compassData.compass.magnetic.x = deviceState.sensors.compass.mag_x;
+    compassData.compass.magnetic.y = deviceState.sensors.compass.mag_y;
+    compassData.compass.magnetic.z = deviceState.sensors.compass.mag_z;
+    compassData.compass.declination = deviceState.sensors.compass.declination;
+    compassData.compass.inclination = deviceState.sensors.compass.inclination;
+    compassData.compass.field_strength = deviceState.sensors.compass.field_strength;
+    compassData.compass.timestamp = deviceState.sensors.compass.timestamp;
+    compassData.compass.valid = deviceState.sensors.compass.valid;
+    
+    // 设置状态信息
+    compassData.status.compass_ready = deviceState.modules.compass_ready;
+    compassData.status.calibrated = true; // 假设已校准
+    compassData.status.interference = false; // 需要根据实际情况设置
+    compassData.status.calibration_quality = 85; // 需要根据实际情况设置
+    
+    return compassData;
+}
+
+ble_system_data_t BLEManager::extractSystemData(const ble_device_state_t& deviceState) {
+    ble_system_data_t systemData;
+    
+    systemData.device_id = deviceState.device_id;
+    systemData.timestamp = deviceState.timestamp;
+    systemData.firmware = deviceState.firmware;
+    systemData.hardware = deviceState.hardware;
+    systemData.power_mode = deviceState.power_mode;
+    
+    // 逐个复制系统数据字段
+    systemData.system.battery_voltage = deviceState.system.battery_voltage;
+    systemData.system.battery_percentage = deviceState.system.battery_percentage;
+    systemData.system.is_charging = deviceState.system.is_charging;
+    systemData.system.external_power = deviceState.system.external_power;
+    systemData.system.signal_strength = deviceState.system.signal_strength;
+    systemData.system.uptime = deviceState.system.uptime;
+    systemData.system.free_heap = deviceState.system.free_heap;
+    systemData.system.cpu_usage = deviceState.system.cpu_usage;
+    systemData.system.temperature = deviceState.system.temperature;
+    
+    // 逐个复制模块状态字段
+    systemData.modules.wifi_ready = deviceState.modules.wifi_ready;
+    systemData.modules.ble_ready = deviceState.modules.ble_ready;
+    systemData.modules.gsm_ready = deviceState.modules.gsm_ready;
+    systemData.modules.gnss_ready = deviceState.modules.gnss_ready;
+    systemData.modules.imu_ready = deviceState.modules.imu_ready;
+    systemData.modules.compass_ready = deviceState.modules.compass_ready;
+    systemData.modules.sd_ready = deviceState.modules.sd_ready;
+    systemData.modules.audio_ready = deviceState.modules.audio_ready;
+    
+    // 复制存储信息
+    systemData.storage.total_mb = deviceState.storage.total_mb;
+    systemData.storage.free_mb = deviceState.storage.free_mb;
+    systemData.storage.used_percentage = (deviceState.storage.total_mb > 0) ? 
+        (int)((deviceState.storage.total_mb - deviceState.storage.free_mb) * 100 / deviceState.storage.total_mb) : 0;
+    
+    // 逐个复制网络数据字段
+    systemData.network.wifi_connected = deviceState.network.wifi_connected;
+    systemData.network.gsm_connected = deviceState.network.gsm_connected;
+    systemData.network.ip_address = deviceState.network.ip_address;
+    systemData.network.operator_name = deviceState.network.operator_name;
+    
+    return systemData;
 }
 
 int BLEManager::getConnectedClients() const {

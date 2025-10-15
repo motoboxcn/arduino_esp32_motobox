@@ -127,16 +127,26 @@
 #define DATA_COLLECTOR_VERBOSE_ENABLED    false   // 数据采集详细输出
 #define DATA_COLLECTOR_OUTPUT_INTERVAL    5000    // 数据采集输出间隔（毫秒）
 
-// BLE配置
+// BLE配置 - 模块化特征值设计
 #ifdef ENABLE_BLE
 #define BLE_DEVICE_NAME_PREFIX            "MotoBox-"          // BLE设备名称前缀
-#define BLE_SERVICE_UUID                  "12345678-1234-1234-1234-123456789ABC"  // 主服务UUID
-#define BLE_CHAR_TELEMETRY_UUID           "12345678-1234-1234-1234-123456789ABD"  // 统一遥测数据特征UUID
-#define BLE_CHAR_DEBUG_UUID               "12345678-1234-1234-1234-123456789ABE"  // 调试数据特征UUID
-#define BLE_CHAR_FUSION_DEBUG_UUID        "12345678-1234-1234-1234-123456789ABF"  // 融合数据调试特征UUID
-#define BLE_UPDATE_INTERVAL               200                 // BLE数据更新间隔（毫秒，5Hz）
-#define BLE_FUSION_UPDATE_INTERVAL        200                 // 融合数据更新间隔（毫秒，5Hz）
-#define BLE_SYSTEM_UPDATE_INTERVAL        2000                // 系统状态更新间隔（毫秒）
+
+// 服务UUID
+#define BLE_SERVICE_UUID                  "A7B3C4D5-E6F7-4A8B-9C0D-1E2F3A4B5C6D"
+
+// 模块化特征值UUID
+#define BLE_CHAR_GPS_UUID                 "B8C9D0E1-F2A3-4B5C-6D7E-8F9A0B1C2D3E"  // GPS位置数据特征值
+#define BLE_CHAR_IMU_UUID                 "C9D0E1F2-A3B4-5C6D-7E8F-9A0B1C2D3E4F"  // IMU传感器数据特征值
+#define BLE_CHAR_COMPASS_UUID             "D0E1F2A3-B4C5-6D7E-8F9A-0B1C2D3E4F5A"  // 罗盘数据特征值
+#define BLE_CHAR_SYSTEM_UUID              "E1F2A3B4-C5D6-7E8F-9A0B-1C2D3E4F5A6B"  // 系统状态数据特征值
+
+// 更新频率配置
+#define BLE_GPS_UPDATE_INTERVAL           200                 // GPS数据更新间隔（毫秒，5Hz）
+#define BLE_IMU_UPDATE_INTERVAL           100                 // IMU数据更新间隔（毫秒，10Hz）
+#define BLE_COMPASS_UPDATE_INTERVAL       500                 // 罗盘数据更新间隔（毫秒，2Hz）
+#define BLE_SYSTEM_UPDATE_INTERVAL        1000                // 系统状态更新间隔（毫秒，1Hz）
+#define BLE_UPDATE_INTERVAL               200                 // 通用BLE数据更新间隔（毫秒，向后兼容）
+
 #define BLE_DEBUG_ENABLED                 false               // BLE调试输出
 #endif
 

@@ -98,6 +98,9 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.location.heading = device_state.telemetry.location.heading;
     convertedState.location.satellites = device_state.telemetry.location.satellites;
     convertedState.location.hdop = device_state.telemetry.location.hdop;
+    convertedState.location.vdop = 1.8f; // 默认值
+    convertedState.location.pdop = 2.1f; // 默认值
+    convertedState.location.fix_type = device_state.telemetry.location.valid ? 3 : 0;
     convertedState.location.valid = device_state.telemetry.location.valid;
     convertedState.location.timestamp = device_state.telemetry.location.timestamp;
     
@@ -111,6 +114,7 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.sensors.imu.roll = device_state.telemetry.sensors.imu.roll;
     convertedState.sensors.imu.pitch = device_state.telemetry.sensors.imu.pitch;
     convertedState.sensors.imu.yaw = device_state.telemetry.sensors.imu.yaw;
+    convertedState.sensors.imu.temperature = 25.0f; // 默认温度
     convertedState.sensors.imu.valid = device_state.telemetry.sensors.imu.valid;
     convertedState.sensors.imu.timestamp = device_state.telemetry.sensors.imu.timestamp;
     
@@ -119,6 +123,9 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.sensors.compass.mag_x = device_state.telemetry.sensors.compass.mag_x;
     convertedState.sensors.compass.mag_y = device_state.telemetry.sensors.compass.mag_y;
     convertedState.sensors.compass.mag_z = device_state.telemetry.sensors.compass.mag_z;
+    convertedState.sensors.compass.declination = -5.2f; // 默认磁偏角
+    convertedState.sensors.compass.inclination = 65.8f; // 默认磁倾角
+    convertedState.sensors.compass.field_strength = 48.5f; // 默认磁场强度
     convertedState.sensors.compass.valid = device_state.telemetry.sensors.compass.valid;
     convertedState.sensors.compass.timestamp = device_state.telemetry.sensors.compass.timestamp;
     
@@ -140,10 +147,20 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.system.signal_strength = device_state.telemetry.system.signal_strength;
     convertedState.system.uptime = device_state.telemetry.system.uptime;
     convertedState.system.free_heap = device_state.telemetry.system.free_heap;
+    convertedState.system.cpu_usage = 45; // 默认CPU使用率
+    convertedState.system.temperature = 42.5f; // 默认系统温度
     
     // 设置存储信息
-    convertedState.storage.size_mb = device_state.sdCardSizeMB;
+    convertedState.storage.total_mb = device_state.sdCardSizeMB;
     convertedState.storage.free_mb = device_state.sdCardFreeMB;
+    convertedState.storage.used_percentage = (convertedState.storage.total_mb > 0) ? 
+        (int)((convertedState.storage.total_mb - convertedState.storage.free_mb) * 100 / convertedState.storage.total_mb) : 0;
+    
+    // 设置网络信息
+    convertedState.network.wifi_connected = false; // 需要根据实际情况设置
+    convertedState.network.gsm_connected = device_state.telemetry.modules.gsm_ready;
+    convertedState.network.ip_address = "10.0.0.100"; // 默认IP
+    convertedState.network.operator_name = "China Mobile"; // 默认运营商
     
     deviceState = &convertedState;
     
