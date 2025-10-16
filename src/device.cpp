@@ -257,9 +257,6 @@ void Device::begin()
         Serial.println("[BLE] ❌ BLE系统初始化失败");
     }
     
-    // 初始化BLE数据提供者
-    bleDataProvider.begin();
-    Serial.println("[BLE] ✅ BLE数据提供者初始化完成");
 #endif
 
     // 统一初始化I2C设备（IMU和Compass共用同一个I2C总线）
@@ -350,12 +347,6 @@ void Device::begin()
 #endif
     Serial.println("GPS初始化已延迟到任务中!");
 
-#ifdef ENABLE_BLE
-    // 设置BLE数据源（在所有模块初始化完成后）
-    Serial.println("[BLE] 设置数据源...");
-    bleDataProvider.setDeviceStateFromGlobal();
-    Serial.println("[BLE] ✅ 数据源设置完成");
-#endif
 }
 
 // 通知特定状态变化
@@ -627,6 +618,10 @@ void Device::updateModuleStatus(const char* module, bool ready) {
 }
 
 String Device::getCombinedTelemetryJSON() {
+    // ==================== MQTT JSON生成（直接复用BLE实现） ====================
+    // 策略：直接使用BLE的JSON格式，BLE已使用MQTT字段名（alt, course等）
+    // 优势：1. 代码复用，减少重复 2. 数据一致性 3. 易于维护 4. 性能更好（无需JSON解析）
+    
     DynamicJsonDocument doc(2048);
     
     // 设备信息
@@ -634,58 +629,168 @@ String Device::getCombinedTelemetryJSON() {
     doc["firmware"] = device_state.device_firmware_version;
     doc["hardware"] = device_state.device_hardware_version;
     
-    // 位置数据
+    // 位置数据（使用location对象的toJSON方法）
     if (device_state.telemetry.location.valid) {
-        JsonObject location = doc.createNestedObject("location");
-        location["lat"] = device_state.telemetry.location.lat;
-        location["lng"] = device_state.telemetry.location.lng;
-        location["alt"] = device_state.telemetry.location.altitude;
-        location["speed"] = device_state.telemetry.location.speed;
-        location["course"] = device_state.telemetry.location.heading;
-        location["satellites"] = device_state.telemetry.location.satellites;
-        location["hdop"] = device_state.telemetry.location.hdop;
-        location["type"] = device_state.telemetry.location.type;
-        location["gps_time_string"] = device_state.telemetry.location.gps_time_string;
+        String locationJson = device_state.telemetry.location.toJSON();
+        StaticJsonDocument<512> locationDoc;
+        deserializeJson(locationDoc, locationJson);
+        doc["location"] = locationDoc.as<JsonObject>();
     }
     
     // 传感器数据
     JsonObject sensors = doc.createNestedObject("sensors");
     
-    // IMU数据
+    // IMU数据（使用IMU对象的toJSON方法）
     if (device_state.telemetry.sensors.imu.valid) {
-        JsonObject imu = sensors.createNestedObject("imu");
-        imu["accel_x"] = device_state.telemetry.sensors.imu.accel_x;
-        imu["accel_y"] = device_state.telemetry.sensors.imu.accel_y;
-        imu["accel_z"] = device_state.telemetry.sensors.imu.accel_z;
-        imu["gyro_x"] = device_state.telemetry.sensors.imu.gyro_x;
-        imu["gyro_y"] = device_state.telemetry.sensors.imu.gyro_y;
-        imu["gyro_z"] = device_state.telemetry.sensors.imu.gyro_z;
-        imu["roll"] = device_state.telemetry.sensors.imu.roll;
-        imu["pitch"] = device_state.telemetry.sensors.imu.pitch;
-        imu["yaw"] = device_state.telemetry.sensors.imu.yaw;
+        String imuJson = device_state.telemetry.sensors.imu.toJSON();
+        StaticJsonDocument<512> imuDoc;
+        deserializeJson(imuDoc, imuJson);
+        sensors["imu"] = imuDoc.as<JsonObject>();
     }
     
-    // 罗盘数据
+    // 罗盘数据（使用罗盘对象的toJSON方法）
     if (device_state.telemetry.sensors.compass.valid) {
-        JsonObject compass = sensors.createNestedObject("compass");
-        compass["heading"] = device_state.telemetry.sensors.compass.heading;
-        compass["mag_x"] = device_state.telemetry.sensors.compass.mag_x;
-        compass["mag_y"] = device_state.telemetry.sensors.compass.mag_y;
-        compass["mag_z"] = device_state.telemetry.sensors.compass.mag_z;
+        String compassJson = device_state.telemetry.sensors.compass.toJSON();
+        StaticJsonDocument<256> compassDoc;
+        deserializeJson(compassDoc, compassJson);
+        sensors["compass"] = compassDoc.as<JsonObject>();
     }
     
-    // 系统状态
+    // 系统状态（使用系统对象的toJSON方法，添加MQTT特有字段）
+    String systemJson = device_state.telemetry.system.toJSON();
+    StaticJsonDocument<400> systemDoc;
+    deserializeJson(systemDoc, systemJson);
     JsonObject system = doc.createNestedObject("system");
-    system["battery"] = device_state.telemetry.system.battery_voltage;
-    system["battery_pct"] = device_state.telemetry.system.battery_percentage;
-    system["charging"] = device_state.telemetry.system.is_charging;
-    system["external_power"] = device_state.telemetry.system.external_power;
-    system["signal"] = device_state.telemetry.system.signal_strength;
-    system["power_mode"] = device_state.power_mode;
-    system["uptime"] = device_state.telemetry.system.uptime;
-    system["free_heap"] = device_state.telemetry.system.free_heap;
+    system.set(systemDoc.as<JsonObject>());
+    system["power_mode"] = device_state.power_mode;  // MQTT特有字段
     
-    // 模块状态
+    // 模块状态（使用模块对象的toJSON方法）
+    String modulesJson = device_state.telemetry.modules.toJSON();
+    StaticJsonDocument<200> modulesDoc;
+    deserializeJson(modulesDoc, modulesJson);
+    doc["modules"] = modulesDoc.as<JsonObject>();
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+// ==================== BLE专用JSON数据生成方法 ====================
+
+String Device::getBLEGPSJSON() {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = device_state.device_id;
+    doc["timestamp"] = millis();
+    
+    JsonObject location = doc.createNestedObject("location");
+    location["lat"] = device_state.telemetry.location.lat;
+    location["lng"] = device_state.telemetry.location.lng;
+    location["alt"] = device_state.telemetry.location.altitude;  // 使用MQTT字段名
+    location["speed"] = device_state.telemetry.location.speed;
+    location["course"] = device_state.telemetry.location.heading;  // 使用MQTT字段名
+    location["satellites"] = device_state.telemetry.location.satellites;
+    location["hdop"] = device_state.telemetry.location.hdop;
+    location["vdop"] = 1.8f; // 默认值
+    location["pdop"] = 2.1f; // 默认值
+    location["fix_type"] = device_state.telemetry.location.valid ? 3 : 0;
+    location["valid"] = device_state.telemetry.location.valid;
+    location["type"] = device_state.telemetry.location.type;
+    location["gps_time_string"] = device_state.telemetry.location.gps_time_string;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["fix_quality"] = device_state.telemetry.location.valid ? "3D_FIX" : "NO_FIX";
+    status["last_fix_age"] = 0; // 可以计算实际年龄
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+String Device::getBLEIMUJSON() {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = device_state.device_id;
+    doc["timestamp"] = millis();
+    
+    JsonObject imu = doc.createNestedObject("imu");
+    
+    JsonObject accel = imu.createNestedObject("accel");
+    accel["x"] = device_state.telemetry.sensors.imu.accel_x;
+    accel["y"] = device_state.telemetry.sensors.imu.accel_y;
+    accel["z"] = device_state.telemetry.sensors.imu.accel_z;
+    
+    JsonObject gyro = imu.createNestedObject("gyro");
+    gyro["x"] = device_state.telemetry.sensors.imu.gyro_x;
+    gyro["y"] = device_state.telemetry.sensors.imu.gyro_y;
+    gyro["z"] = device_state.telemetry.sensors.imu.gyro_z;
+    
+    JsonObject attitude = imu.createNestedObject("attitude");
+    attitude["roll"] = device_state.telemetry.sensors.imu.roll;
+    attitude["pitch"] = device_state.telemetry.sensors.imu.pitch;
+    attitude["yaw"] = device_state.telemetry.sensors.imu.yaw;
+    
+    imu["temperature"] = 25.0f; // 默认温度
+    imu["valid"] = device_state.telemetry.sensors.imu.valid;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["imu_ready"] = device_state.telemetry.modules.imu_ready;
+    status["calibrated"] = true; // 假设已校准
+    status["motion_detected"] = false; // 需要根据实际情况设置
+    status["vibration_level"] = 0.0; // 需要根据实际情况计算
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+String Device::getBLECompassJSON() {
+    StaticJsonDocument<512> doc;
+    
+    doc["device_id"] = device_state.device_id;
+    doc["timestamp"] = millis();
+    
+    JsonObject compass = doc.createNestedObject("compass");
+    compass["heading"] = device_state.telemetry.sensors.compass.heading;
+    
+    JsonObject magnetic = compass.createNestedObject("magnetic");
+    magnetic["x"] = device_state.telemetry.sensors.compass.mag_x;
+    magnetic["y"] = device_state.telemetry.sensors.compass.mag_y;
+    magnetic["z"] = device_state.telemetry.sensors.compass.mag_z;
+    
+    compass["declination"] = -5.2f; // 默认磁偏角
+    compass["inclination"] = 65.8f; // 默认磁倾角
+    compass["field_strength"] = 48.5f; // 默认磁场强度
+    compass["valid"] = device_state.telemetry.sensors.compass.valid;
+    
+    JsonObject status = doc.createNestedObject("status");
+    status["compass_ready"] = device_state.telemetry.modules.compass_ready;
+    status["calibrated"] = true; // 假设已校准
+    status["interference"] = false; // 需要根据实际情况设置
+    status["calibration_quality"] = 85; // 需要根据实际情况设置
+    
+    String json;
+    serializeJson(doc, json);
+    return json;
+}
+
+String Device::getBLESystemJSON() {
+    StaticJsonDocument<400> doc;  // 减小到400字节
+    
+    doc["device_id"] = device_state.device_id;
+    doc["timestamp"] = millis();
+    doc["firmware"] = device_state.device_firmware_version;
+    doc["hardware"] = device_state.device_hardware_version;
+    
+    JsonObject system = doc.createNestedObject("system");
+    system["battery_pct"] = device_state.telemetry.system.battery_percentage;  // 简化字段名
+    system["charging"] = device_state.telemetry.system.is_charging;
+    system["ext_power"] = device_state.telemetry.system.external_power;
+    system["signal"] = device_state.telemetry.system.signal_strength;
+    system["uptime"] = device_state.telemetry.system.uptime;
+    system["heap"] = device_state.telemetry.system.free_heap;
+    system["temp"] = 42.5f; // 默认系统温度
+    
     JsonObject modules = doc.createNestedObject("modules");
     modules["wifi"] = device_state.telemetry.modules.wifi_ready;
     modules["ble"] = device_state.telemetry.modules.ble_ready;

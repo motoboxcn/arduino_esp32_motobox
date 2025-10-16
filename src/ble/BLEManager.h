@@ -11,8 +11,8 @@
 #include <BLE2902.h>
 #include <ArduinoJson.h>
 
-// 包含BLE类型定义
-#include "BLETypes.h"
+// 包含设备状态定义
+#include "device.h"
 
 /**
  * @brief MotoBox BLE服务器回调类
@@ -79,18 +79,6 @@ private:
     // 内部方法
     void createService();
     void createCharacteristics();
-    
-    // JSON数据生成方法
-    String gpsDataToJSON(const ble_gps_data_t& gpsData);
-    String imuDataToJSON(const ble_imu_data_t& imuData);
-    String compassDataToJSON(const ble_compass_data_t& compassData);
-    String systemDataToJSON(const ble_system_data_t& systemData);
-    
-    // 从完整设备状态提取模块数据
-    ble_gps_data_t extractGPSData(const ble_device_state_t& deviceState);
-    ble_imu_data_t extractIMUData(const ble_device_state_t& deviceState);
-    ble_compass_data_t extractCompassData(const ble_device_state_t& deviceState);
-    ble_system_data_t extractSystemData(const ble_device_state_t& deviceState);
 
 public:
     BLEManager();
@@ -115,13 +103,13 @@ public:
     void stopAdvertising();
     
     // 模块化数据更新方法
-    void updateGPSData(const ble_gps_data_t& gpsData);
-    void updateIMUData(const ble_imu_data_t& imuData);
-    void updateCompassData(const ble_compass_data_t& compassData);
-    void updateSystemData(const ble_system_data_t& systemData);
+    void updateGPSData();
+    void updateIMUData();
+    void updateCompassData();
+    void updateSystemData();
     
     // 统一数据更新方法（从完整设备状态提取各模块数据）
-    void updateAllData(const ble_device_state_t& deviceState);
+    void updateAllData();
     
     // 调试和状态
     void setDebug(bool enable);

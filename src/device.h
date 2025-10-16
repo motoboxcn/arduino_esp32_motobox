@@ -23,8 +23,7 @@
 #endif
 
 #ifdef ENABLE_BLE
-#include "ble/BLEManager.h"
-#include "ble/BLEDataProvider.h"
+#include "ble/BLEManager.h" 
 #endif
 
 
@@ -51,6 +50,26 @@ typedef struct
             bool valid;
             String type; // 位置类型：WIFI GNSS LBS
             String gps_time_string; // GPS时间字符串
+            
+            // 位置数据JSON序列化方法
+            String toJSON() const {
+                if (!valid) return "{}";
+                
+                StaticJsonDocument<512> doc;
+                doc["lat"] = lat;
+                doc["lng"] = lng;
+                doc["alt"] = altitude;
+                doc["speed"] = speed;
+                doc["course"] = heading;
+                doc["satellites"] = satellites;
+                doc["hdop"] = hdop;
+                doc["type"] = type;
+                doc["gps_time_string"] = gps_time_string;
+                
+                String json;
+                serializeJson(doc, json);
+                return json;
+            }
         } location;
         
         // 传感器数据
@@ -61,6 +80,26 @@ typedef struct
                 float gyro_x, gyro_y, gyro_z;
                 float roll, pitch, yaw;
                 bool valid;
+                
+                // IMU数据JSON序列化方法
+                String toJSON() const {
+                    if (!valid) return "{}";
+                    
+                    StaticJsonDocument<512> doc;
+                    doc["accel_x"] = accel_x;
+                    doc["accel_y"] = accel_y;
+                    doc["accel_z"] = accel_z;
+                    doc["gyro_x"] = gyro_x;
+                    doc["gyro_y"] = gyro_y;
+                    doc["gyro_z"] = gyro_z;
+                    doc["roll"] = roll;
+                    doc["pitch"] = pitch;
+                    doc["yaw"] = yaw;
+                    
+                    String json;
+                    serializeJson(doc, json);
+                    return json;
+                }
             } imu;
             
             // 罗盘数据
@@ -68,6 +107,21 @@ typedef struct
                 float heading;
                 float mag_x, mag_y, mag_z;
                 bool valid;
+                
+                // 罗盘数据JSON序列化方法
+                String toJSON() const {
+                    if (!valid) return "{}";
+                    
+                    StaticJsonDocument<256> doc;
+                    doc["heading"] = heading;
+                    doc["mag_x"] = mag_x;
+                    doc["mag_y"] = mag_y;
+                    doc["mag_z"] = mag_z;
+                    
+                    String json;
+                    serializeJson(doc, json);
+                    return json;
+                }
             } compass;
         } sensors;
         
@@ -80,6 +134,22 @@ typedef struct
             int signal_strength;
             uint32_t uptime;
             uint32_t free_heap;
+            
+            // 系统状态JSON序列化方法
+            String toJSON() const {
+                StaticJsonDocument<400> doc;
+                doc["battery"] = battery_voltage;
+                doc["battery_pct"] = battery_percentage;
+                doc["charging"] = is_charging;
+                doc["external_power"] = external_power;
+                doc["signal"] = signal_strength;
+                doc["uptime"] = uptime;
+                doc["free_heap"] = free_heap;
+                
+                String json;
+                serializeJson(doc, json);
+                return json;
+            }
         } system;
         
         // 模块状态
@@ -89,6 +159,20 @@ typedef struct
             bool gsm_ready;
             bool imu_ready;
             bool compass_ready;
+            
+            // 模块状态JSON序列化方法
+            String toJSON() const {
+                StaticJsonDocument<200> doc;
+                doc["wifi"] = wifi_ready;
+                doc["ble"] = ble_ready;
+                doc["gsm"] = gsm_ready;
+                doc["imu"] = imu_ready;
+                doc["compass"] = compass_ready;
+                
+                String json;
+                serializeJson(doc, json);
+                return json;
+            }
         } modules;
     } telemetry;
     
@@ -144,8 +228,14 @@ public:
     void updateSystemData(int signal, uint32_t uptime, uint32_t free_heap);
     void updateModuleStatus(const char* module, bool ready);
     
-    // 统一MQTT数据获取
+    // 统一MQTT数据获取（复用BLE JSON实现）
     String getCombinedTelemetryJSON();
+    
+    // BLE专用JSON数据获取方法（模块化，可被MQTT复用）
+    String getBLEGPSJSON();
+    String getBLEIMUJSON();
+    String getBLECompassJSON();
+    String getBLESystemJSON();
     
 private:
 };

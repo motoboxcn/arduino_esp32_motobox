@@ -46,7 +46,6 @@
 
 #ifdef ENABLE_BLE
 #include "ble/BLEManager.h"
-#include "ble/BLEDataProvider.h"
 #endif
 
 // GSM模块包含
@@ -317,15 +316,10 @@ void loop()
   }
 
 #ifdef ENABLE_BLE
-  // BLE数据更新
-  bleDataProvider.update();
-  
   // 如果有客户端连接，更新BLE数据
   if (bleManager.isClientConnected()) {
-    // 使用模块化数据更新方法
-    if (bleDataProvider.isDataValid()) {
-      bleManager.updateAllData(*bleDataProvider.getDeviceState());
-    }
+    // 直接使用device_state更新BLE数据
+    bleManager.updateAllData();
   }
   
   // BLE管理器更新
