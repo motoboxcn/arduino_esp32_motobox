@@ -19,6 +19,8 @@ typedef struct {
     struct {
         double lat;
         double lng;
+        String type; // 位置类型：WIFI GNSS LBS
+        String gps_time_string; // GPS时间字符串
         float altitude;
         float speed;
         float heading;
@@ -73,11 +75,8 @@ typedef struct {
         bool wifi_ready;
         bool ble_ready;
         bool gsm_ready;
-        bool gnss_ready;
         bool imu_ready;
         bool compass_ready;
-        bool sd_ready;
-        bool audio_ready;
     } modules;
     
     // 存储信息
@@ -91,8 +90,6 @@ typedef struct {
     struct {
         bool wifi_connected;
         bool gsm_connected;
-        String ip_address;
-        String operator_name;
     } network;
 } ble_device_state_t;
 
@@ -115,7 +112,6 @@ typedef struct {
         uint32_t timestamp;
     } location;
     struct {
-        bool gnss_ready;
         String fix_quality;
         uint32_t last_fix_age;
     } status;
@@ -189,22 +185,12 @@ typedef struct {
         bool wifi_ready;
         bool ble_ready;
         bool gsm_ready;
-        bool gnss_ready;
         bool imu_ready;
         bool compass_ready;
-        bool sd_ready;
-        bool audio_ready;
     } modules;
-    struct {
-        uint64_t total_mb;
-        uint64_t free_mb;
-        int used_percentage;
-    } storage;
     struct {
         bool wifi_connected;
         bool gsm_connected;
-        String ip_address;
-        String operator_name;
     } network;
 } ble_system_data_t;
 

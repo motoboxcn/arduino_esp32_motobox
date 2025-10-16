@@ -863,7 +863,7 @@ bool FusionLocationManager::requestWiFiLocation() {
     return tryWiFiLocation();
 }
 
-String FusionLocationManager::getLocationSource() {
+String FusionLocationManager::getLocationType() {
     return "MADGWICK_AHRS";
 }
 

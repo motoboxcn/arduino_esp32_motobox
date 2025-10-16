@@ -37,8 +37,6 @@
 
 // Air780EG配置
 #define AIR780EG_BAUD_RATE           115200
-#define AIR780EG_LOG_VERBOSE_ENABLED false
-
 
 // GNSS查询间隔配置（优化串口资源使用）
 #define GNSS_UPDATE_INTERVAL_VALID    3000   // GNSS有效时3秒查询一次

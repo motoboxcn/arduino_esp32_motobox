@@ -2,6 +2,7 @@
 
 #ifdef ENABLE_BLE
 
+#include "device.h"
 #include "utils/DebugUtils.h"
 
 #ifdef ENABLE_IMU_FUSION
@@ -93,6 +94,8 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     // 设置位置数据
     convertedState.location.lat = device_state.telemetry.location.lat;
     convertedState.location.lng = device_state.telemetry.location.lng;
+    convertedState.location.type = device_state.telemetry.location.type;
+    convertedState.location.gps_time_string = device_state.telemetry.location.gps_time_string;
     convertedState.location.altitude = device_state.telemetry.location.altitude;
     convertedState.location.speed = device_state.telemetry.location.speed;
     convertedState.location.heading = device_state.telemetry.location.heading;
@@ -102,7 +105,6 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.location.pdop = 2.1f; // 默认值
     convertedState.location.fix_type = device_state.telemetry.location.valid ? 3 : 0;
     convertedState.location.valid = device_state.telemetry.location.valid;
-    convertedState.location.timestamp = device_state.telemetry.location.timestamp;
     
     // 设置IMU传感器数据
     convertedState.sensors.imu.accel_x = device_state.telemetry.sensors.imu.accel_x;
@@ -116,7 +118,6 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.sensors.imu.yaw = device_state.telemetry.sensors.imu.yaw;
     convertedState.sensors.imu.temperature = 25.0f; // 默认温度
     convertedState.sensors.imu.valid = device_state.telemetry.sensors.imu.valid;
-    convertedState.sensors.imu.timestamp = device_state.telemetry.sensors.imu.timestamp;
     
     // 设置罗盘传感器数据
     convertedState.sensors.compass.heading = device_state.telemetry.sensors.compass.heading;
@@ -127,17 +128,13 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.sensors.compass.inclination = 65.8f; // 默认磁倾角
     convertedState.sensors.compass.field_strength = 48.5f; // 默认磁场强度
     convertedState.sensors.compass.valid = device_state.telemetry.sensors.compass.valid;
-    convertedState.sensors.compass.timestamp = device_state.telemetry.sensors.compass.timestamp;
     
     // 设置模块状态
     convertedState.modules.wifi_ready = device_state.telemetry.modules.wifi_ready;
     convertedState.modules.ble_ready = device_state.telemetry.modules.ble_ready;
     convertedState.modules.gsm_ready = device_state.telemetry.modules.gsm_ready;
-    convertedState.modules.gnss_ready = device_state.telemetry.modules.gnss_ready;
     convertedState.modules.imu_ready = device_state.telemetry.modules.imu_ready;
     convertedState.modules.compass_ready = device_state.telemetry.modules.compass_ready;
-    convertedState.modules.sd_ready = device_state.telemetry.modules.sd_ready;
-    convertedState.modules.audio_ready = device_state.telemetry.modules.audio_ready;
     
     // 设置系统状态
     convertedState.system.battery_voltage = device_state.telemetry.system.battery_voltage;
@@ -150,17 +147,9 @@ void BLEDataProvider::setDeviceStateFromGlobal() {
     convertedState.system.cpu_usage = 45; // 默认CPU使用率
     convertedState.system.temperature = 42.5f; // 默认系统温度
     
-    // 设置存储信息
-    convertedState.storage.total_mb = device_state.sdCardSizeMB;
-    convertedState.storage.free_mb = device_state.sdCardFreeMB;
-    convertedState.storage.used_percentage = (convertedState.storage.total_mb > 0) ? 
-        (int)((convertedState.storage.total_mb - convertedState.storage.free_mb) * 100 / convertedState.storage.total_mb) : 0;
-    
     // 设置网络信息
     convertedState.network.wifi_connected = false; // 需要根据实际情况设置
     convertedState.network.gsm_connected = device_state.telemetry.modules.gsm_ready;
-    convertedState.network.ip_address = "10.0.0.100"; // 默认IP
-    convertedState.network.operator_name = "China Mobile"; // 默认运营商
     
     deviceState = &convertedState;
     

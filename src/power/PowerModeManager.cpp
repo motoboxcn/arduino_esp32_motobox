@@ -187,7 +187,7 @@ PowerMode PowerModeManager::evaluateOptimalMode() {
 bool PowerModeManager::detectHighSpeedMovement() {
     // 通过GPS速度判断是否高速运动
     #ifdef USE_AIR780EG_GSM
-    if (air780eg.getGNSS().gnss_data.is_fixed && air780eg.getGNSS().gnss_data.speed > 30.0) {
+    if (air780eg.getGNSS().gnss_data.is_gnss_valid && air780eg.getGNSS().gnss_data.speed > 30.0) {
         return true; // 速度超过30km/h认为是高速运动
     }
     #endif

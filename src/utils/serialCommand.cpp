@@ -40,7 +40,7 @@ void handleSerialCommand()
                 Serial.println("网络状态: " + String(air780eg.getNetwork().isNetworkRegistered() ? "已连接" : "未连接"));
                 Serial.println("信号强度: " + String(air780eg.getNetwork().getSignalStrength()) + " dBm");
                 Serial.println("运营商: " + air780eg.getNetwork().getOperatorName());
-                if (air780eg.getGNSS().isFixed())
+                if (air780eg.getGNSS().isValid())
                 {
                     Serial.println("GNSS状态: 已定位 (卫星数: " + String(air780eg.getGNSS().getSatelliteCount()) + ")");
                 }
@@ -71,7 +71,6 @@ void handleSerialCommand()
 #endif
             Serial.println("");
             Serial.println("--- 传感器状态 ---");
-            Serial.println("GNSS状态: " + String(device_state.telemetry.modules.gnss_ready ? "就绪" : "未就绪"));
             Serial.println("IMU状态: " + String(device_state.telemetry.modules.imu_ready ? "就绪" : "未就绪"));
             Serial.println("罗盘状态: " + String(device_state.telemetry.modules.compass_ready ? "就绪" : "未就绪"));
             Serial.println("");

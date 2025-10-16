@@ -147,7 +147,7 @@ void taskDataProcessing(void *parameter)
     air780eg.loop();
     
     // 获取GPS数据并更新到融合定位系统和统一数据管理
-    if (air780eg.getGNSS().isDataValid()) {
+    if (air780eg.getGNSS().isValid()) {
         double lat = air780eg.getGNSS().getLatitude();
         double lng = air780eg.getGNSS().getLongitude();
         float alt = air780eg.getGNSS().getAltitude();
@@ -155,9 +155,11 @@ void taskDataProcessing(void *parameter)
         float heading = air780eg.getGNSS().getCourse();
         uint8_t sats = air780eg.getGNSS().getSatelliteCount();
         float hdop = air780eg.getGNSS().getHDOP();
-        
+        String type = air780eg.getGNSS().getLocationType();
+        String gpsTimeString = air780eg.getGNSS().getGPSTimeString();
+
         // 更新到统一数据管理
-        device.updateLocationData(lat, lng, alt, speed, heading, sats, hdop);
+        device.updateLocationData(lat, lng, alt, speed, heading, sats, hdop, type,gpsTimeString);
         
 #ifdef ENABLE_IMU_FUSION
         // 更新到融合定位系统
@@ -274,13 +276,24 @@ void loop()
     printCompassData();
 #endif
 
-    // 打印融合定位状态
+    // 更新融合定位数据到device_state
 #ifdef ENABLE_IMU_FUSION
     if (fusionLocationManager.isInitialized())
     {
       Position pos = fusionLocationManager.getFusedPosition();
       if (pos.valid)
       {
+        // 将融合定位数据更新到device_state
+        device.updateLocationData(
+          pos.lat, 
+          pos.lng, 
+          pos.altitude, 
+          pos.speed * 3.6f,  // m/s转换为km/h
+          pos.heading, 
+          8,  // 融合定位假设8颗卫星
+          pos.accuracy  // 使用精度作为hdop
+        );
+        
         fusionLocationManager.printStats();
       }
     }

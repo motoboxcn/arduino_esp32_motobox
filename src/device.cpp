@@ -3,6 +3,7 @@
 #include "utils/DataCollector.h"
 #include "config.h"
 #include "imu/qmi8658.h"
+#include <sys/time.h>  // 用于settimeofday
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -17,37 +18,6 @@ extern const VersionInfo &getVersionInfo();
 
 device_state_t device_state;
 state_changes_t state_changes;
-void print_device_info()
-{
-    // 如果休眠准备中的时候不打印
-    if (powerManager.getPowerState() == POWER_STATE_PREPARING_SLEEP)
-    {
-        return;
-    }
-    Serial.println("Device Info:");
-    Serial.printf("Device ID: %s\n", device_state.device_id.c_str());
-    Serial.printf("Sleep Time: %d\n", device_state.sleep_time);
-    Serial.printf("Firmware Version: %s\n", device_state.device_firmware_version);
-    Serial.printf("Hardware Version: %s\n", device_state.device_hardware_version);
-    Serial.printf("WiFi Ready: %d\n", device_state.telemetry.modules.wifi_ready);
-    Serial.printf("BLE Ready: %d\n", device_state.telemetry.modules.ble_ready);
-    Serial.printf("Battery Voltage: %d\n", device_state.telemetry.system.battery_voltage);
-    Serial.printf("Battery Percentage: %d\n", device_state.telemetry.system.battery_percentage);
-    Serial.printf("Charging: %d\n", device_state.telemetry.system.is_charging);
-    Serial.printf("External Power: %d\n", device_state.telemetry.system.external_power);
-    Serial.printf("GSM Ready: %d\n", device_state.telemetry.modules.gsm_ready);
-    Serial.printf("GNSS Ready: %d\n", device_state.telemetry.modules.gnss_ready);
-    Serial.printf("IMU Ready: %d\n", device_state.telemetry.modules.imu_ready);
-    Serial.printf("Compass Ready: %d\n", device_state.telemetry.modules.compass_ready);
-    Serial.printf("SD Card Ready: %d\n", device_state.telemetry.modules.sd_ready);
-    if (device_state.telemetry.modules.sd_ready)
-    {
-        Serial.printf("SD Card Size: %llu MB\n", device_state.sdCardSizeMB);
-        Serial.printf("SD Card Free: %llu MB\n", device_state.sdCardFreeMB);
-    }
-    Serial.printf("Audio Ready: %d\n", device_state.telemetry.modules.audio_ready);
-    Serial.println("--------------------------------");
-}
 
 String Device::get_device_id()
 {
@@ -67,39 +37,6 @@ device_state_t *get_device_state()
 void set_device_state(device_state_t *state)
 {
     device_state = *state;
-}
-
-// 生成精简版设备状态JSON
-// fw: 固件版本, hw: 硬件版本, wifi/ble/gps/imu/compass: 各模块状态, bat_v: 电池电压, bat_pct: 电池百分比, is_charging: 充电状态, ext_power: 外部电源状态, sd: SD卡状态
-String device_state_to_json(device_state_t *state)
-{
-    StaticJsonDocument<256> doc; // 精简后更小即可
-    doc["fw"] = device_state.device_firmware_version;
-    doc["hw"] = device_state.device_hardware_version;
-    doc["wifi"] = device_state.telemetry.modules.wifi_ready;
-    doc["ble"] = device_state.telemetry.modules.ble_ready;
-    doc["gsm"] = device_state.telemetry.modules.gsm_ready;
-    doc["gnss"] = device_state.telemetry.modules.gnss_ready;
-    doc["imu"] = device_state.telemetry.modules.imu_ready;
-    doc["compass"] = device_state.telemetry.modules.compass_ready;
-    doc["bat_v"] = device_state.telemetry.system.battery_voltage;
-    doc["bat_pct"] = device_state.telemetry.system.battery_percentage;
-    doc["is_charging"] = device_state.telemetry.system.is_charging;
-    doc["ext_power"] = device_state.telemetry.system.external_power;
-    doc["sd"] = device_state.telemetry.modules.sd_ready;
-    if (device_state.telemetry.modules.sd_ready)
-    {
-        doc["sd_size"] = device_state.sdCardSizeMB;
-        doc["sd_free"] = device_state.sdCardFreeMB;
-    }
-    doc["audio"] = device_state.telemetry.modules.audio_ready;
-    return doc.as<String>();
-}
-
-// 添加包装函数
-String getDeviceStatusJSON()
-{
-    return device_state_to_json(&device_state);
 }
 
 String getLocationJSON()
@@ -524,24 +461,6 @@ void update_device_state()
         state_changes.led_mode_changed = true;
     }
 
-    // 检查SD卡状态变化
-    if (device_state.telemetry.modules.sd_ready != last_state.telemetry.modules.sd_ready)
-    {
-        notify_state_change("SD卡状态",
-                            last_state.telemetry.modules.sd_ready ? "就绪" : "未就绪",
-                            device_state.telemetry.modules.sd_ready ? "就绪" : "未就绪");
-        state_changes.sdcard_changed = true;
-    }
-
-    // 检查音频状态变化
-    if (device_state.telemetry.modules.audio_ready != last_state.telemetry.modules.audio_ready)
-    {
-        notify_state_change("音频状态",
-                            last_state.telemetry.modules.audio_ready ? "就绪" : "未就绪",
-                            device_state.telemetry.modules.audio_ready ? "就绪" : "未就绪");
-        state_changes.audio_changed = true;
-    }
-
     // 更新上一次状态
     last_state = device_state;
 
@@ -645,16 +564,17 @@ bool Device::initializeMQTT()
 
 // 数据更新方法实现
 void Device::updateLocationData(double lat, double lng, float alt, float speed, 
-                               float heading, uint8_t sats, float hdop) {
+                               float heading, uint8_t sats, float hdop, String type, String gpsTimeString) {
     device_state.telemetry.location.lat = lat;
     device_state.telemetry.location.lng = lng;
+    device_state.telemetry.location.type = type;
+    device_state.telemetry.location.gps_time_string = gpsTimeString;
     device_state.telemetry.location.altitude = alt;
     device_state.telemetry.location.speed = speed;
     device_state.telemetry.location.heading = heading;
     device_state.telemetry.location.satellites = sats;
     device_state.telemetry.location.hdop = hdop;
     device_state.telemetry.location.valid = true;
-    device_state.telemetry.location.timestamp = millis();
 }
 
 void Device::updateIMUData(float ax, float ay, float az, float gx, float gy, float gz,
@@ -669,7 +589,6 @@ void Device::updateIMUData(float ax, float ay, float az, float gx, float gy, flo
     device_state.telemetry.sensors.imu.pitch = pitch;
     device_state.telemetry.sensors.imu.yaw = yaw;
     device_state.telemetry.sensors.imu.valid = true;
-    device_state.telemetry.sensors.imu.timestamp = millis();
 }
 
 void Device::updateCompassData(float heading, float mx, float my, float mz) {
@@ -678,7 +597,6 @@ void Device::updateCompassData(float heading, float mx, float my, float mz) {
     device_state.telemetry.sensors.compass.mag_y = my;
     device_state.telemetry.sensors.compass.mag_z = mz;
     device_state.telemetry.sensors.compass.valid = true;
-    device_state.telemetry.sensors.compass.timestamp = millis();
 }
 
 void Device::updateBatteryData(int voltage, int percentage, bool charging, bool ext_power) {
@@ -701,16 +619,10 @@ void Device::updateModuleStatus(const char* module, bool ready) {
         device_state.telemetry.modules.ble_ready = ready;
     } else if (strcmp(module, "gsm") == 0) {
         device_state.telemetry.modules.gsm_ready = ready;
-    } else if (strcmp(module, "gnss") == 0) {
-        device_state.telemetry.modules.gnss_ready = ready;
     } else if (strcmp(module, "imu") == 0) {
         device_state.telemetry.modules.imu_ready = ready;
     } else if (strcmp(module, "compass") == 0) {
         device_state.telemetry.modules.compass_ready = ready;
-    } else if (strcmp(module, "sd") == 0) {
-        device_state.telemetry.modules.sd_ready = ready;
-    } else if (strcmp(module, "audio") == 0) {
-        device_state.telemetry.modules.audio_ready = ready;
     }
 }
 
@@ -719,10 +631,8 @@ String Device::getCombinedTelemetryJSON() {
     
     // 设备信息
     doc["device_id"] = device_state.device_id;
-    doc["timestamp"] = millis();
     doc["firmware"] = device_state.device_firmware_version;
     doc["hardware"] = device_state.device_hardware_version;
-    doc["power_mode"] = device_state.power_mode;
     
     // 位置数据
     if (device_state.telemetry.location.valid) {
@@ -734,7 +644,8 @@ String Device::getCombinedTelemetryJSON() {
         location["course"] = device_state.telemetry.location.heading;
         location["satellites"] = device_state.telemetry.location.satellites;
         location["hdop"] = device_state.telemetry.location.hdop;
-        location["timestamp"] = device_state.telemetry.location.timestamp;
+        location["type"] = device_state.telemetry.location.type;
+        location["gps_time_string"] = device_state.telemetry.location.gps_time_string;
     }
     
     // 传感器数据
@@ -752,7 +663,6 @@ String Device::getCombinedTelemetryJSON() {
         imu["roll"] = device_state.telemetry.sensors.imu.roll;
         imu["pitch"] = device_state.telemetry.sensors.imu.pitch;
         imu["yaw"] = device_state.telemetry.sensors.imu.yaw;
-        imu["timestamp"] = device_state.telemetry.sensors.imu.timestamp;
     }
     
     // 罗盘数据
@@ -762,7 +672,6 @@ String Device::getCombinedTelemetryJSON() {
         compass["mag_x"] = device_state.telemetry.sensors.compass.mag_x;
         compass["mag_y"] = device_state.telemetry.sensors.compass.mag_y;
         compass["mag_z"] = device_state.telemetry.sensors.compass.mag_z;
-        compass["timestamp"] = device_state.telemetry.sensors.compass.timestamp;
     }
     
     // 系统状态
@@ -772,6 +681,7 @@ String Device::getCombinedTelemetryJSON() {
     system["charging"] = device_state.telemetry.system.is_charging;
     system["external_power"] = device_state.telemetry.system.external_power;
     system["signal"] = device_state.telemetry.system.signal_strength;
+    system["power_mode"] = device_state.power_mode;
     system["uptime"] = device_state.telemetry.system.uptime;
     system["free_heap"] = device_state.telemetry.system.free_heap;
     
@@ -780,18 +690,8 @@ String Device::getCombinedTelemetryJSON() {
     modules["wifi"] = device_state.telemetry.modules.wifi_ready;
     modules["ble"] = device_state.telemetry.modules.ble_ready;
     modules["gsm"] = device_state.telemetry.modules.gsm_ready;
-    modules["gnss"] = device_state.telemetry.modules.gnss_ready;
     modules["imu"] = device_state.telemetry.modules.imu_ready;
     modules["compass"] = device_state.telemetry.modules.compass_ready;
-    modules["sd"] = device_state.telemetry.modules.sd_ready;
-    modules["audio"] = device_state.telemetry.modules.audio_ready;
-    
-    // SD卡信息
-    if (device_state.telemetry.modules.sd_ready) {
-        JsonObject storage = doc.createNestedObject("storage");
-        storage["size_mb"] = device_state.sdCardSizeMB;
-        storage["free_mb"] = device_state.sdCardFreeMB;
-    }
     
     String json;
     serializeJson(doc, json);

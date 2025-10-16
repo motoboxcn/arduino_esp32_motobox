@@ -53,7 +53,7 @@ void loop() {
     // 获取位置信息
     Position pos = fusionLocationManager.getFusedPosition();
     if (pos.valid) {
-        String source = fusionLocationManager.getLocationSource();
+        String source = fusionLocationManager.getLocationType();
         Serial.printf("位置: %.6f, %.6f [来源: %s]\n", 
                      pos.lat, pos.lng, source.c_str());
     }
@@ -90,7 +90,7 @@ fusionLocationManager.printStatus();
 fusionLocationManager.printStats();
 
 // 获取当前定位来源
-String source = fusionLocationManager.getLocationSource();
+String source = fusionLocationManager.getLocationType();
 Serial.println("当前定位来源: " + source);
 ```
 

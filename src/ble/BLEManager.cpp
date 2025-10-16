@@ -436,7 +436,6 @@ String BLEManager::gpsDataToJSON(const ble_gps_data_t& gpsData) {
     location["valid"] = gpsData.location.valid;
     
     JsonObject status = doc.createNestedObject("status");
-    status["gnss_ready"] = gpsData.status.gnss_ready;
     status["fix_quality"] = gpsData.status.fix_quality;
     status["last_fix_age"] = gpsData.status.last_fix_age;
     
@@ -509,7 +508,7 @@ String BLEManager::compassDataToJSON(const ble_compass_data_t& compassData) {
 }
 
 String BLEManager::systemDataToJSON(const ble_system_data_t& systemData) {
-    StaticJsonDocument<768> doc;
+    StaticJsonDocument<400> doc;  // 减小到400字节
     
     doc["device_id"] = systemData.device_id;
     doc["timestamp"] = systemData.timestamp;
@@ -518,36 +517,20 @@ String BLEManager::systemDataToJSON(const ble_system_data_t& systemData) {
     doc["power_mode"] = systemData.power_mode;
     
     JsonObject system = doc.createNestedObject("system");
-    system["battery_voltage"] = systemData.system.battery_voltage;
-    system["battery_percentage"] = systemData.system.battery_percentage;
-    system["is_charging"] = systemData.system.is_charging;
-    system["external_power"] = systemData.system.external_power;
-    system["signal_strength"] = systemData.system.signal_strength;
+    system["battery_pct"] = systemData.system.battery_percentage;  // 简化字段名
+    system["charging"] = systemData.system.is_charging;
+    system["ext_power"] = systemData.system.external_power;
+    system["signal"] = systemData.system.signal_strength;
     system["uptime"] = systemData.system.uptime;
-    system["free_heap"] = systemData.system.free_heap;
-    system["cpu_usage"] = systemData.system.cpu_usage;
-    system["temperature"] = systemData.system.temperature;
+    system["heap"] = systemData.system.free_heap;
+    system["temp"] = systemData.system.temperature;
     
     JsonObject modules = doc.createNestedObject("modules");
-    modules["wifi_ready"] = systemData.modules.wifi_ready;
-    modules["ble_ready"] = systemData.modules.ble_ready;
-    modules["gsm_ready"] = systemData.modules.gsm_ready;
-    modules["gnss_ready"] = systemData.modules.gnss_ready;
-    modules["imu_ready"] = systemData.modules.imu_ready;
-    modules["compass_ready"] = systemData.modules.compass_ready;
-    modules["sd_ready"] = systemData.modules.sd_ready;
-    modules["audio_ready"] = systemData.modules.audio_ready;
-    
-    JsonObject storage = doc.createNestedObject("storage");
-    storage["total_mb"] = systemData.storage.total_mb;
-    storage["free_mb"] = systemData.storage.free_mb;
-    storage["used_percentage"] = systemData.storage.used_percentage;
-    
-    JsonObject network = doc.createNestedObject("network");
-    network["wifi_connected"] = systemData.network.wifi_connected;
-    network["gsm_connected"] = systemData.network.gsm_connected;
-    network["ip_address"] = systemData.network.ip_address;
-    network["operator"] = systemData.network.operator_name;
+    modules["wifi"] = systemData.modules.wifi_ready;
+    modules["ble"] = systemData.modules.ble_ready;
+    modules["gsm"] = systemData.modules.gsm_ready;
+    modules["imu"] = systemData.modules.imu_ready;
+    modules["compass"] = systemData.modules.compass_ready;
     
     return doc.as<String>();
 }
@@ -575,7 +558,6 @@ ble_gps_data_t BLEManager::extractGPSData(const ble_device_state_t& deviceState)
     gpsData.location.timestamp = deviceState.location.timestamp;
     
     // 设置状态信息
-    gpsData.status.gnss_ready = deviceState.modules.gnss_ready;
     gpsData.status.fix_quality = deviceState.location.valid ? "3D_FIX" : "NO_FIX";
     gpsData.status.last_fix_age = millis() - deviceState.location.timestamp;
     
@@ -664,23 +646,12 @@ ble_system_data_t BLEManager::extractSystemData(const ble_device_state_t& device
     systemData.modules.wifi_ready = deviceState.modules.wifi_ready;
     systemData.modules.ble_ready = deviceState.modules.ble_ready;
     systemData.modules.gsm_ready = deviceState.modules.gsm_ready;
-    systemData.modules.gnss_ready = deviceState.modules.gnss_ready;
     systemData.modules.imu_ready = deviceState.modules.imu_ready;
     systemData.modules.compass_ready = deviceState.modules.compass_ready;
-    systemData.modules.sd_ready = deviceState.modules.sd_ready;
-    systemData.modules.audio_ready = deviceState.modules.audio_ready;
-    
-    // 复制存储信息
-    systemData.storage.total_mb = deviceState.storage.total_mb;
-    systemData.storage.free_mb = deviceState.storage.free_mb;
-    systemData.storage.used_percentage = (deviceState.storage.total_mb > 0) ? 
-        (int)((deviceState.storage.total_mb - deviceState.storage.free_mb) * 100 / deviceState.storage.total_mb) : 0;
     
     // 逐个复制网络数据字段
     systemData.network.wifi_connected = deviceState.network.wifi_connected;
     systemData.network.gsm_connected = deviceState.network.gsm_connected;
-    systemData.network.ip_address = deviceState.network.ip_address;
-    systemData.network.operator_name = deviceState.network.operator_name;
     
     return systemData;
 }

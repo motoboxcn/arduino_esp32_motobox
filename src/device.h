@@ -49,7 +49,8 @@ typedef struct
             uint8_t satellites;
             float hdop;
             bool valid;
-            uint32_t timestamp;
+            String type; // 位置类型：WIFI GNSS LBS
+            String gps_time_string; // GPS时间字符串
         } location;
         
         // 传感器数据
@@ -60,7 +61,6 @@ typedef struct
                 float gyro_x, gyro_y, gyro_z;
                 float roll, pitch, yaw;
                 bool valid;
-                uint32_t timestamp;
             } imu;
             
             // 罗盘数据
@@ -68,7 +68,6 @@ typedef struct
                 float heading;
                 float mag_x, mag_y, mag_z;
                 bool valid;
-                uint32_t timestamp;
             } compass;
         } sensors;
         
@@ -88,17 +87,10 @@ typedef struct
             bool wifi_ready;
             bool ble_ready;
             bool gsm_ready;
-            bool gnss_ready;
             bool imu_ready;
             bool compass_ready;
-            bool sd_ready;
-            bool audio_ready;
         } modules;
     } telemetry;
-    
-    // SD卡信息（低频更新）
-    uint64_t sdCardSizeMB; // SD卡大小(MB)
-    uint64_t sdCardFreeMB; // SD卡剩余空间(MB)
     
     // 功耗模式
     int power_mode; // 功耗模式 0:休眠 1:基本 2:正常 3:运动
@@ -116,8 +108,6 @@ typedef struct {
         bool gsm_changed;          // GSM状态变化
         bool sleep_time_changed;   // 休眠时间变化
         bool led_mode_changed;     // LED模式变化
-        bool sdcard_changed;       // SD卡状态变化
-        bool audio_changed;        // 音频状态变化
 } state_changes_t;
 
 void update_device_state();
@@ -125,11 +115,8 @@ void update_device_state();
 extern device_state_t device_state;
 extern state_changes_t state_changes;
 
-String device_state_to_json(device_state_t *state);
-
 device_state_t *get_device_state();
 void set_device_state(device_state_t *state);
-void print_device_info();
 
 
 class Device
@@ -147,14 +134,9 @@ public:
     // GSM初始化
     void initializeGSM();
     
-    // 欢迎语音配置
-    void setWelcomeVoiceType(int voiceType);
-    void playWelcomeVoice();
-    String getWelcomeVoiceInfo();
-    
     // 数据更新接口
     void updateLocationData(double lat, double lng, float alt, float speed, 
-                           float heading, uint8_t sats, float hdop);
+                           float heading, uint8_t sats, float hdop, String type, String gpsTimeString);
     void updateIMUData(float ax, float ay, float az, float gx, float gy, float gz,
                       float roll, float pitch, float yaw);
     void updateCompassData(float heading, float mx, float my, float mz);

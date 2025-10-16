@@ -136,7 +136,7 @@ void DataCollector::collectGPSData() {
     #ifdef USE_AIR780EG_GSM
     extern Air780EG air780eg;
     
-    if (air780eg.isInitialized() && air780eg.getGNSS().isDataValid()) {
+    if (air780eg.isInitialized() && air780eg.getGNSS().isValid()) {
         current_sensor_data.gps.latitude = air780eg.getGNSS().getLatitude();
         current_sensor_data.gps.longitude = air780eg.getGNSS().getLongitude();
         current_sensor_data.gps.altitude = air780eg.getGNSS().getAltitude();

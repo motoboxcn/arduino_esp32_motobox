@@ -345,7 +345,7 @@ public:
      * @brief 获取当前定位来源
      * @return 定位来源字符串 ("GNSS", "WiFi", "LBS", "Unknown")
      */
-    String getLocationSource();
+    String getLocationType();
     
     /**
      * @brief 获取总距离
