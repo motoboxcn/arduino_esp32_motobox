@@ -1,5 +1,6 @@
 #include "utils/serialCommand.h"
 #include "utils/DataCollector.h"
+#include "ota/OTAManager.h"
 
 #ifdef ENABLE_POWER_MODE_MANAGEMENT
 #include "power/PowerModeManager.h"
@@ -422,6 +423,45 @@ void handleSerialCommand()
             Serial.println("❌ 融合定位功能未启用");
             #endif
         }
+        else if (command.startsWith("ota."))
+        {
+            if (command == "ota.check")
+            {
+                Serial.println("🔍 手动检查OTA更新...");
+                otaManager.checkForUpdates();
+            }
+            else if (command == "ota.auto.on")
+            {
+                otaManager.setAutoUpgrade(true);
+                Serial.println("✅ 自动升级已启用");
+            }
+            else if (command == "ota.auto.off")
+            {
+                otaManager.setAutoUpgrade(false);
+                Serial.println("❌ 自动升级已禁用");
+            }
+            else if (command == "ota.status")
+            {
+                Serial.println("=== OTA状态 ===");
+                Serial.println("自动升级: " + String(otaManager.getAutoUpgrade() ? "启用" : "禁用"));
+                Serial.println("当前状态: " + String(otaManager.getStatus()));
+                Serial.println("升级进度: " + String(otaManager.getProgress()) + "%");
+            }
+            else if (command == "ota.help")
+            {
+                Serial.println("=== OTA升级命令帮助 ===");
+                Serial.println("  ota.check    - 手动检查更新");
+                Serial.println("  ota.auto.on  - 启用自动升级");
+                Serial.println("  ota.auto.off - 禁用自动升级");
+                Serial.println("  ota.status   - 显示OTA状态");
+                Serial.println("  ota.help     - 显示此帮助");
+            }
+            else
+            {
+                Serial.println("❌ 未知OTA命令: " + command);
+                Serial.println("输入 'ota.help' 查看OTA命令帮助");
+            }
+        }
         else if (command == "help")
         {
             Serial.println("=== 可用命令 ===");
@@ -474,6 +514,12 @@ void handleSerialCommand()
             Serial.println("  fusion.help  - 显示融合定位命令帮助");
             Serial.println("");
 #endif
+            Serial.println("  ota.check    - 手动检查OTA更新");
+            Serial.println("  ota.auto.on  - 启用自动升级");
+            Serial.println("  ota.auto.off - 禁用自动升级");
+            Serial.println("  ota.status   - 显示OTA状态");
+            Serial.println("  ota.help     - 显示OTA命令帮助");
+            Serial.println("");
             Serial.println("提示: 命令不区分大小写");
         }
         else

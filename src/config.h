@@ -68,6 +68,8 @@
 #define OTA_CHECK_INTERVAL           3600000  // 在线升级检查间隔(1小时)
 #define OTA_DOWNLOAD_TIMEOUT         30000    // 下载超时时间(30秒)
 #define OTA_MAX_RETRY_COUNT          3        // 最大重试次数
+#define OTA_AUTO_UPGRADE_KEY         "ota_auto"  // 自动升级开关存储键
+#define OTA_DEFAULT_AUTO_UPGRADE     true     // 默认启用自动升级
 
 // 默认引脚定义（如果platformio.ini中未定义）
 #ifndef BAT_PIN

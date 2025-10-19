@@ -243,11 +243,31 @@ void setup()
   dataCollector.setDebug(true);
   dataCollector.begin();
   
+  // 初始化OTA管理器
+  otaManager.begin(&air780eg);
+  otaManager.setMQTTPublishCallback([](const char* topic, const char* payload) {
+      air780eg.getMQTT().publish(topic, payload);
+  });
+  
+  // 设置MQTT消息回调处理OTA
+  air780eg.getMQTT().setMessageCallback([](const String& topic, const String& payload) {
+      if (topic.indexOf("/ota/") > 0) {
+          otaManager.handleMQTTMessage(topic, payload);
+      }
+  });
+  
   Serial.println("=== 系统初始化完成 ===");
 }
 
 void loop()
 {
+  // OTA定期检查更新
+  static unsigned long lastOTACheck = 0;
+  if (millis() - lastOTACheck > 3600000) { // 1小时检查一次
+    otaManager.checkForUpdates();
+    lastOTACheck = millis();
+  }
+  
   static unsigned long loopCount = 0;
   static unsigned long lastLoopReport = 0;
   static unsigned long lastSlowUpdate = 0;

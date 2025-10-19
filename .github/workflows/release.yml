@@ -1,0 +1,100 @@
+name: Build and Deploy OTA Firmware
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., v4.3.0)'
+        required: true
+        default: 'v4.3.0'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install PlatformIO
+      run: |
+        pip install platformio
+        
+    - name: Build firmware
+      run: |
+        pio run --environment esp32-air780eg
+        
+    - name: Get version
+      id: version
+      run: |
+        if [ "${{ github.event_name }}" = "release" ]; then
+          VERSION="${{ github.event.release.tag_name }}"
+        else
+          VERSION="${{ github.event.inputs.version }}"
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+        
+    - name: Prepare firmware
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        mkdir -p firmware
+        cp .pio/build/esp32-air780eg/firmware.bin firmware/${VERSION}.bin
+        ls -la firmware/
+        
+    - name: Deploy to server
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: daboluo.cc
+        username: root
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        source: "firmware/${{ steps.version.outputs.version }}.bin"
+        target: "/root/daboluo-office/html/ota/firmware/esp32-air780eg/"
+        strip_components: 1
+        
+    - name: Verify deployment
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: daboluo.cc
+        username: root
+        key: ${{ secrets.SERVER_SSH_KEY }}
+        script: |
+          VERSION="${{ steps.version.outputs.version }}"
+          FILE="/root/daboluo-office/html/ota/firmware/esp32-air780eg/${VERSION}.bin"
+          if [ -f "$FILE" ]; then
+            SIZE=$(stat -c%s "$FILE")
+            echo "✅ 固件部署成功: $FILE (${SIZE} bytes)"
+            echo "🔗 下载地址: https://daboluo.cc/ota/firmware/esp32-air780eg/${VERSION}.bin"
+            
+            # 测试下载
+            curl -I "https://daboluo.cc/ota/firmware/esp32-air780eg/${VERSION}.bin"
+          else
+            echo "❌ 固件部署失败: $FILE 不存在"
+            exit 1
+          fi
+          
+    - name: Create deployment summary
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+        echo "## 🚀 OTA固件部署完成" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**版本**: $VERSION" >> $GITHUB_STEP_SUMMARY
+        echo "**下载地址**: https://daboluo.cc/ota/firmware/esp32-air780eg/${VERSION}.bin" >> $GITHUB_STEP_SUMMARY
+        echo "**硬件平台**: esp32-air780eg" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📱 MQTT测试消息" >> $GITHUB_STEP_SUMMARY
+        echo '```json' >> $GITHUB_STEP_SUMMARY
+        echo '{' >> $GITHUB_STEP_SUMMARY
+        echo '  "latest_version": "'$VERSION'",' >> $GITHUB_STEP_SUMMARY
+        echo '  "download_url": "https://daboluo.cc/ota/firmware/esp32-air780eg/'$VERSION'.bin",' >> $GITHUB_STEP_SUMMARY
+        echo '  "force_update": false,' >> $GITHUB_STEP_SUMMARY
+        echo '  "release_notes": "GitHub Actions自动构建版本"' >> $GITHUB_STEP_SUMMARY
+        echo '}' >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
