@@ -43,8 +43,8 @@
 #define GNSS_UPDATE_INTERVAL_INVALID  10000  // GNSS无效时10秒查询一次
 
 // MQTT配置
-#define MQTT_BROKER                  "222.186.32.152"
-#define MQTT_PORT                    32571
+#define MQTT_BROKER                  "daboluo.cc"
+#define MQTT_PORT                    1883
 #define MQTT_CLIENT_ID_PREFIX        ""
 #define MQTT_USERNAME                "box"
 #define MQTT_PASSWORD                "box"

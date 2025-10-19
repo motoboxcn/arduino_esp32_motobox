@@ -274,29 +274,6 @@ void loop()
 #ifdef ENABLE_COMPASS
     printCompassData();
 #endif
-
-    // 更新融合定位数据到device_state
-#ifdef ENABLE_IMU_FUSION
-    if (fusionLocationManager.isInitialized())
-    {
-      Position pos = fusionLocationManager.getFusedPosition();
-      if (pos.valid)
-      {
-        // 将融合定位数据更新到device_state
-        device.updateLocationData(
-          pos.lat, 
-          pos.lng, 
-          pos.altitude, 
-          pos.speed * 3.6f,  // m/s转换为km/h
-          pos.heading, 
-          8,  // 融合定位假设8颗卫星
-          pos.accuracy  // 使用精度作为hdop
-        );
-        
-        fusionLocationManager.printStats();
-      }
-    }
-#endif
   }
 
   // 数据采集器处理
