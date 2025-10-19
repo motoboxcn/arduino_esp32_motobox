@@ -444,7 +444,19 @@ void handleSerialCommand()
             {
                 Serial.println("=== OTA状态 ===");
                 Serial.println("自动升级: " + String(otaManager.getAutoUpgrade() ? "启用" : "禁用"));
-                Serial.println("当前状态: " + String(otaManager.getStatus()));
+                
+                String statusText;
+                switch(otaManager.getStatus()) {
+                    case 0: statusText = "空闲"; break;
+                    case 1: statusText = "检查中"; break;
+                    case 2: statusText = "下载中"; break;
+                    case 3: statusText = "安装中"; break;
+                    case 4: statusText = "成功"; break;
+                    case 5: statusText = "失败"; break;
+                    default: statusText = "未知"; break;
+                }
+                
+                Serial.println("当前状态: " + statusText);
                 Serial.println("升级进度: " + String(otaManager.getProgress()) + "%");
             }
             else if (command == "ota.help")

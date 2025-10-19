@@ -24,6 +24,7 @@ public:
     void begin(Air780EG* air780eg_instance);
     void handleMQTTMessage(String topic, String payload);
     void checkForUpdates();
+    void checkTimeout();
     
     // 自动升级开关
     void setAutoUpgrade(bool enabled);
@@ -39,6 +40,7 @@ private:
     String currentVersion;
     OTAStatus currentStatus;
     int upgradeProgress;
+    unsigned long checkStartTime;
     
     Air780EG* air780eg;
     void (*mqttPublishCallback)(const char*, const char*);
@@ -49,7 +51,6 @@ private:
     
     bool checkUpgradeConditions();
     bool downloadAndInstall(String url);
-    void reportStatus(String status, int progress, String message = "");
     void logMessage(String message);
 };
 

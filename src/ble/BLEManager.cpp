@@ -310,7 +310,7 @@ void BLEManager::updateGPSData() {
     pGPSCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] GPS数据已更新: %d 字节\n", jsonData.length());
+    BLE_DEBUG("GPS数据已更新: %d 字节", jsonData.length());
     #endif
 }
 
@@ -340,7 +340,7 @@ void BLEManager::updateIMUData() {
     pIMUCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] IMU数据已更新: %d 字节\n", jsonData.length());
+    BLE_DEBUG("IMU数据已更新: %d 字节", jsonData.length());
     #endif
 }
 
@@ -370,7 +370,7 @@ void BLEManager::updateCompassData() {
     pCompassCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] 罗盘数据已更新: %d 字节\n", jsonData.length());
+    BLE_DEBUG("罗盘数据已更新: %d 字节", jsonData.length());
     #endif
 }
 
@@ -400,7 +400,7 @@ void BLEManager::updateSystemData() {
     pSystemCharacteristic->notify();
     
     #ifdef BLE_DEBUG_ENABLED
-    Serial.printf("[BLE] 系统数据已更新: %d 字节\n", jsonData.length());
+    BLE_DEBUG("系统数据已更新: %d 字节", jsonData.length());
     #endif
 }
 

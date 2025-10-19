@@ -3,7 +3,10 @@
 #include "utils/DataCollector.h"
 #include "config.h"
 #include "imu/qmi8658.h"
+#include "ota/OTAManager.h"
 #include <sys/time.h>  // 用于settimeofday
+
+extern OTAManager otaManager;
 // GSM模块包含
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -57,6 +60,13 @@ void mqttMessageCallback(const String &topic, const String &payload)
     Serial.println("=== MQTT消息回调触发 ===");
     Serial.printf("收到消息 [%s]: %s\n", topic.c_str(), payload.c_str());
     Serial.printf("主题长度: %d, 负载长度: %d\n", topic.length(), payload.length());
+
+    // 处理OTA消息
+    if (topic == "device/ota/check") {
+        Serial.println("🔄 处理OTA消息...");
+        otaManager.handleMQTTMessage(topic, payload);
+        return;
+    }
 
     // 解析JSON
     StaticJsonDocument<256> doc;
@@ -188,6 +198,10 @@ void mqttConnectionCallback(bool connected)
     {
         // 订阅控制主题
         air780eg.getMQTT().subscribe("vehicle/v1/" + device_state.device_id + "/ctrl/#", 1);
+        
+        // 订阅OTA主题
+        air780eg.getMQTT().subscribe("device/ota/check", 1);
+        Serial.println("✅ 已订阅所有MQTT主题");
     }
     else
     {

@@ -13,7 +13,7 @@ OTAManager::OTAManager()
     deviceId = "ESP32_" + String((uint32_t)ESP.getEfuseMac(), HEX);
     currentVersion = String(FIRMWARE_VERSION);
     
-    otaTopicCheck = "device/" + deviceId + "/ota/check";
+    otaTopicCheck = "device/ota/check";
     otaTopicDownload = "device/" + deviceId + "/ota/download";
     otaTopicStatus = "device/" + deviceId + "/ota/status";
 }
@@ -32,57 +32,63 @@ void OTAManager::handleMQTTMessage(String topic, String payload) {
             String serverVersion = doc["latest_version"];
             String downloadUrl = doc["download_url"];
             
+            logMessage("服务端版本: " + serverVersion + ", 当前版本: " + currentVersion);
+            
             if (serverVersion != currentVersion) {
-                logMessage("发现新版本: " + serverVersion);
+                logMessage("🔄 发现新版本，准备升级...");
                 
                 if (!getAutoUpgrade()) {
-                    logMessage("自动升级已禁用，跳过升级");
-                    reportStatus("auto_disabled", 0, "自动升级已禁用");
+                    logMessage("❌ 自动升级已禁用");
+                    currentStatus = OTA_IDLE; // 重置状态
                     return;
                 }
                 
                 if (checkUpgradeConditions()) {
                     currentStatus = OTA_DOWNLOADING;
-                    reportStatus("downloading", 0, "开始下载固件");
                     
                     if (downloadAndInstall(downloadUrl)) {
                         currentStatus = OTA_SUCCESS;
-                        reportStatus("success", 100, "升级成功，即将重启");
-                        delay(2000);
+                        logMessage("✅ 升级成功，重启中...");
+                        delay(1000);
                         ESP.restart();
                     } else {
                         currentStatus = OTA_FAILED;
-                        reportStatus("failed", 0, "升级失败");
+                        logMessage("❌ 升级失败");
                     }
                 } else {
-                    reportStatus("conditions_not_met", 0, "升级条件不满足");
+                    logMessage("❌ 升级条件不满足");
+                    currentStatus = OTA_IDLE; // 重置状态
                 }
             } else {
-                reportStatus("up_to_date", 100, "已是最新版本");
+                logMessage("✅ 固件已是最新版本，无需升级");
+                currentStatus = OTA_IDLE; // 重置状态
             }
+        } else {
+            logMessage("❌ 解析服务端消息失败");
+            currentStatus = OTA_IDLE; // 重置状态
         }
     }
 }
 
 void OTAManager::checkForUpdates() {
-    if (!air780eg || currentStatus != OTA_IDLE) return;
+    if (!air780eg) return;
     
-    currentStatus = OTA_CHECKING;
-    
-    DynamicJsonDocument doc(512);
-    doc["device_id"] = deviceId;
-    doc["current_version"] = currentVersion;
-    doc["hardware_version"] = "esp32-air780eg";
-    doc["timestamp"] = millis();
-    
-    String payload;
-    serializeJson(doc, payload);
-    
-    if (mqttPublishCallback) {
-        mqttPublishCallback(otaTopicCheck.c_str(), payload.c_str());
+    if (currentStatus != OTA_IDLE) {
+        logMessage("❌ OTA正在进行中，请等待完成后再试");
+        return;
     }
     
-    logMessage("发送版本检查请求");
+    // 检查MQTT连接状态
+    if (!air780eg->getMQTT().isConnected()) {
+        logMessage("❌ MQTT未连接，无法检查更新");
+        return;
+    }
+    
+    logMessage("检查更新中...");
+    currentStatus = OTA_CHECKING;
+    checkStartTime = millis();
+    
+    logMessage("等待服务端retain消息...");
 }
 
 bool OTAManager::checkUpgradeConditions() {
@@ -118,7 +124,6 @@ bool OTAManager::downloadAndInstall(String url) {
             upgradeProgress = progress;
             if (progress % 20 == 0) {
                 logMessage("下载进度: " + String(progress) + "%");
-                reportStatus("downloading", progress, "下载进度: " + String(progress) + "%");
             }
         }
     );
@@ -132,22 +137,7 @@ bool OTAManager::downloadAndInstall(String url) {
     }
 }
 
-void OTAManager::reportStatus(String status, int progress, String message) {
-    DynamicJsonDocument doc(512);
-    doc["device_id"] = deviceId;
-    doc["status"] = status;
-    doc["progress"] = progress;
-    doc["message"] = message;
-    doc["timestamp"] = millis();
-    doc["version"] = currentVersion;
-    
-    String payload;
-    serializeJson(doc, payload);
-    
-    if (mqttPublishCallback) {
-        mqttPublishCallback(otaTopicStatus.c_str(), payload.c_str());
-    }
-}
+
 
 void OTAManager::setMQTTPublishCallback(void (*callback)(const char*, const char*)) {
     mqttPublishCallback = callback;
@@ -155,7 +145,10 @@ void OTAManager::setMQTTPublishCallback(void (*callback)(const char*, const char
 
 void OTAManager::setAutoUpgrade(bool enabled) {
     Preferences prefs;
-    prefs.begin("ota", false);
+    if (!prefs.begin("ota", false)) {
+        logMessage("无法打开NVS分区进行写入");
+        return;
+    }
     prefs.putBool(OTA_AUTO_UPGRADE_KEY, enabled);
     prefs.end();
     logMessage("自动升级设置: " + String(enabled ? "启用" : "禁用"));
@@ -163,7 +156,10 @@ void OTAManager::setAutoUpgrade(bool enabled) {
 
 bool OTAManager::getAutoUpgrade() {
     Preferences prefs;
-    prefs.begin("ota", true);
+    if (!prefs.begin("ota", true)) {
+        logMessage("NVS分区未初始化，使用默认设置");
+        return OTA_DEFAULT_AUTO_UPGRADE;
+    }
     bool autoUpgrade = prefs.getBool(OTA_AUTO_UPGRADE_KEY, OTA_DEFAULT_AUTO_UPGRADE);
     prefs.end();
     return autoUpgrade;
@@ -171,4 +167,11 @@ bool OTAManager::getAutoUpgrade() {
 
 void OTAManager::logMessage(String message) {
     Serial.println("[OTAManager] " + message);
+}
+
+void OTAManager::checkTimeout() {
+    if (currentStatus == OTA_CHECKING && millis() - checkStartTime > 10000) {
+        logMessage("❌ 检查超时，未收到服务端消息");
+        currentStatus = OTA_IDLE;
+    }
 }

@@ -105,6 +105,17 @@ enum class DebugLevel {
         Serial.printf("[MQTT-DEBUG] " msg "\n", ##__VA_ARGS__); \
     } } while(0)
 
+// BLE专用调试宏 - 使用动态调试级别
+#define BLE_INFO(msg, ...) \
+    do { if ((int)DebugManager::getGlobalLevel() >= (int)DebugLevel::INFO) { \
+        Serial.printf("[BLE] " msg "\n", ##__VA_ARGS__); \
+    } } while(0)
+
+#define BLE_DEBUG(msg, ...) \
+    do { if ((int)DebugManager::getGlobalLevel() >= (int)DebugLevel::DEBUG) { \
+        Serial.printf("[BLE] " msg "\n", ##__VA_ARGS__); \
+    } } while(0)
+
 // 运行时调试级别控制
 class DebugManager {
 public:
@@ -126,5 +137,10 @@ private:
     static DebugLevel gnssLevel;
     static DebugLevel mqttLevel;
 };
+
+// 通用调试打印函数
+void debugPrint(const String& message);
+void debugPrint(const char* message);
+void debugPrintf(const char* format, ...);
 
 #endif // DEBUG_UTILS_H

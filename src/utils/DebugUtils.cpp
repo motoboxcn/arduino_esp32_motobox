@@ -51,3 +51,26 @@ void DebugManager::printCurrentLevels() {
     Serial.println("级别说明: 0=无, 1=错误, 2=警告, 3=信息, 4=调试, 5=详细");
     Serial.println("========================");
 }
+
+// 通用调试打印函数实现
+void debugPrint(const String& message) {
+    if ((int)DebugManager::getGlobalLevel() >= (int)DebugLevel::DEBUG) {
+        Serial.println(message);
+    }
+}
+
+void debugPrint(const char* message) {
+    if ((int)DebugManager::getGlobalLevel() >= (int)DebugLevel::DEBUG) {
+        Serial.println(message);
+    }
+}
+
+void debugPrintf(const char* format, ...) {
+    if ((int)DebugManager::getGlobalLevel() >= (int)DebugLevel::DEBUG) {
+        va_list args;
+        va_start(args, format);
+        Serial.printf(format, args);
+        va_end(args);
+        Serial.println(); // 添加换行符
+    }
+}
