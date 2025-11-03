@@ -180,8 +180,12 @@ void taskDataProcessing(void *parameter)
 
 void setup()
 {
+  // ESP32-S3 USB CDC 串口初始化
+  // 重要：ESP32-S3 需要足够的时间来初始化USB串口
+  // 在完全初始化之前发送的数据会被丢弃，导致串口没有输出
+  // 建议延迟至少 2-3 秒，确保USB CDC完全初始化
   Serial.begin(115200);
-  delay(1000);
+  delay(3000);  // ESP32-S3需要3秒初始化USB CDC串口
 
   PreferencesUtils::init();
 
