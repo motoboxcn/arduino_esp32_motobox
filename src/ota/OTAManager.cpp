@@ -1,6 +1,7 @@
 #include "OTAManager.h"
 #include "config.h"
 #include <Preferences.h>
+#include "esp_system.h"  // 用于esp_read_mac函数
 
 OTAManager otaManager;
 
@@ -10,7 +11,15 @@ OTAManager::OTAManager()
       mqttPublishCallback(nullptr),
       air780eg(nullptr) {
     
-    deviceId = "ESP32_" + String((uint32_t)ESP.getEfuseMac(), HEX);
+    // 使用与Device类相同的设备ID生成方式（基于WiFi MAC地址）
+    // 确保与BLE设备名称中的设备ID一致
+    uint8_t mac[6];
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    char device_id[13];
+    snprintf(device_id, sizeof(device_id), "%02X%02X%02X%02X%02X%02X",
+             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+    deviceId = String(device_id);
+    
     currentVersion = String(FIRMWARE_VERSION);
     
     otaTopicCheck = "device/ota/check";

@@ -141,10 +141,10 @@
 #define BLE_CHAR_SYSTEM_UUID              "E1F2A3B4-C5D6-7E8F-9A0B-1C2D3E4F5A6B"  // 系统状态数据特征值
 
 // 更新频率配置
-#define BLE_GPS_UPDATE_INTERVAL           200                 // GPS数据更新间隔（毫秒，5Hz）
-#define BLE_IMU_UPDATE_INTERVAL           100                 // IMU数据更新间隔（毫秒，10Hz）
+#define BLE_GPS_UPDATE_INTERVAL           1000                // GPS数据更新间隔（毫秒，1Hz，1秒一次）
+#define BLE_IMU_UPDATE_INTERVAL           200                 // IMU数据更新间隔（毫秒，5Hz，200ms一次）
 #define BLE_COMPASS_UPDATE_INTERVAL       500                 // 罗盘数据更新间隔（毫秒，2Hz）
-#define BLE_SYSTEM_UPDATE_INTERVAL        1000                // 系统状态更新间隔（毫秒，1Hz）
+#define BLE_SYSTEM_UPDATE_INTERVAL        10000               // 系统状态更新间隔（毫秒，0.1Hz，10秒一次）
 #define BLE_UPDATE_INTERVAL               200                 // 通用BLE数据更新间隔（毫秒，向后兼容）
 
 #define BLE_DEBUG_ENABLED                 false               // BLE调试输出

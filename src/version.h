@@ -3,10 +3,10 @@
 
 // 自动生成的版本号宏
 #ifndef BUILD_NUMBER
-  #define BUILD_NUMBER "606"
+  #define BUILD_NUMBER "681"
 #endif
 #ifndef FIRMWARE_VERSION
-  #define FIRMWARE_VERSION "v4.3.0+606"
+  #define FIRMWARE_VERSION "v4.3.0+681"
 #endif
 #ifndef HARDWARE_VERSION
   #define HARDWARE_VERSION "dev"
