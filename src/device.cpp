@@ -273,11 +273,17 @@ void Device::begin()
     
 #endif
 
-    // 统一初始化I2C设备（IMU和Compass共用同一个I2C总线）
+    // 初始化I2C设备
+    // IMU使用共享I2C总线（Wire1），地磁如果定义了IIC_SDA_GY和IIC_SCL_GY则使用独立I2C总线（Wire）
     Serial.println("[I2C] 开始初始化I2C设备...");
-    Serial.printf("[I2C] 引脚配置 - SDA:%d, SCL:%d\n", IIC_SDA_PIN, IIC_SCL_PIN);
+    Serial.printf("[I2C] 主I2C引脚配置 - SDA:%d, SCL:%d\n", IIC_SDA_PIN, IIC_SCL_PIN);
+#ifdef IIC_SDA_GY
+#ifdef IIC_SCL_GY
+    Serial.printf("[I2C] 地磁独立I2C引脚配置 - SDA:%d, SCL:%d\n", IIC_SDA_GY, IIC_SCL_GY);
+#endif
+#endif
 
-    // 首先初始化共享I2C管理器
+    // 首先初始化共享I2C管理器（用于IMU等设备）
     if (!initSharedI2C(IIC_SDA_PIN, IIC_SCL_PIN))
     {
         Serial.println("[I2C] ❌ 共享I2C初始化失败");
@@ -311,6 +317,8 @@ void Device::begin()
 #endif
 
 #ifdef ENABLE_COMPASS
+    // 地磁初始化：如果定义了IIC_SDA_GY和IIC_SCL_GY，将使用独立的I2C总线（Wire）
+    // 否则使用共享I2C总线（Wire1）
     Serial.println("[Compass] 开始初始化指南针系统...");
     try
     {

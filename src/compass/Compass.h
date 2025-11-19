@@ -2,7 +2,7 @@
 #define COMPASS_H
 
 #include <Wire.h>
-#include <QMC5883LCompass.h>
+#include <qmc5883p.h>
 #include "config.h"
 #include "device.h"
 #include "utils/I2CManager.h"
@@ -126,6 +126,21 @@ public:
     void getRawData(int16_t &x, int16_t &y, int16_t &z);
 
     /**
+     * @brief 获取X轴磁场强度（float类型）
+     */
+    float getX();
+
+    /**
+     * @brief 获取Y轴磁场强度（float类型）
+     */
+    float getY();
+
+    /**
+     * @brief 获取Z轴磁场强度（float类型）
+     */
+    float getZ();
+
+    /**
      * @brief 设置磁偏角（单位：度）
      */
     void setDeclination(float declination);
@@ -173,13 +188,15 @@ public:
 private:
     bool _initialized;
     float _declination;          // 磁偏角校正值
-    QMC5883LCompass qmc;         // QMC5883L传感器对象
+    QMC5883P qmc;                // QMC5883P传感器对象
     unsigned long _lastReadTime; // 上次读取时间
     unsigned long _lastDebugPrintTime;
+    bool _useIndependentI2C;     // 是否使用独立的I2C总线
+    TwoWire* _wire;              // I2C总线对象指针（用于独立I2C）
     
     // 数据处理函数
-    float calculateHeading(int16_t x, int16_t y);
-    void updateCompassData(int16_t x, int16_t y, int16_t z, float heading);
+    float calculateHeading(float x, float y);
+    void updateCompassData(float x, float y, float z, float heading);
 };
 
 #ifdef ENABLE_COMPASS

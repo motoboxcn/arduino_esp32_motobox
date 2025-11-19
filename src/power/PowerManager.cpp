@@ -6,6 +6,8 @@
 #include "esp_bt_main.h"
 #include "esp_task_wdt.h"
 #include "SPI.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #ifdef USE_AIR780EG_GSM
 #include "Air780EG.h"
@@ -196,15 +198,24 @@ void PowerManager::enterLowPowerMode()
     // 配置电源域
     configurePowerDomains();
     
+    // 暂停所有FreeRTOS任务，避免阻止深度睡眠
+    // 注意：深度睡眠会自动停止所有任务，但暂停可以避免在进入睡眠前产生日志
+    Serial.println("[电源管理] 暂停所有任务...");
+    vTaskSuspendAll(); // 暂停所有任务
+    
+    // 禁用看门狗，避免阻止深度睡眠
+    // 注意：深度睡眠会自动禁用看门狗，但提前禁用可以避免看门狗重启
+    esp_task_wdt_delete(NULL); // 删除当前任务的看门狗
+    
     Serial.println("[电源管理] 💤 进入深度睡眠");
     Serial.flush();
-    delay(100);
+    delay(300); // 增加延时，确保串口数据完全发送
     
-    // 最后一次喂狗，然后进入深度睡眠
-    esp_task_wdt_reset();
-    
-    // 进入深度睡眠
+    // 进入深度睡眠（深度睡眠会自动停止所有任务和看门狗）
+    // 深度睡眠会重启系统，唤醒后从setup()重新开始
     esp_deep_sleep_start();
+    
+    // 这行代码永远不会执行（深度睡眠会重启系统）
 }
 
 bool PowerManager::configureWakeupSources()
@@ -279,6 +290,14 @@ void PowerManager::disablePeripherals()
     } else {
         Serial.println("[电源管理] Air780EG 未初始化，跳过关闭");
     }
+    
+    // 强制拉低GSM_EN引脚，确保模块完全断电
+    #ifdef GSM_EN
+    pinMode(GSM_EN, OUTPUT);
+    digitalWrite(GSM_EN, LOW);
+    Serial.printf("[电源管理] ✅ GSM_EN引脚已拉低 (GPIO%d)\n", GSM_EN);
+    delay(100); // 等待模块完全断电
+    #endif
     #endif
     
     // 2. 关闭WiFi和蓝牙
@@ -398,6 +417,13 @@ void PowerManager::configureGPIOForSleep()
     // 喂狗，防止看门狗重启
     esp_task_wdt_reset();
     
+    // 确保GSM_EN引脚被拉低（如果还没有）
+    #ifdef GSM_EN
+    pinMode(GSM_EN, OUTPUT);
+    digitalWrite(GSM_EN, LOW);
+    Serial.printf("[电源管理] GSM_EN引脚已配置为低功耗模式 (GPIO%d)\n", GSM_EN);
+    #endif
+    
     // 只配置关键的未使用 GPIO，避免配置过多导致超时
     const int unused_gpios[] = {0, 2, 4, 5, 12, 13, 14, 15, 17, 18, 19, 27, 32, 35};
     const int num_unused = sizeof(unused_gpios) / sizeof(unused_gpios[0]);
@@ -420,6 +446,15 @@ void PowerManager::configureGPIOForSleep()
         #endif
         #ifdef PWM_LED_PIN
         if (gpio == PWM_LED_PIN) continue;
+        #endif
+        #ifdef GSM_EN
+        if (gpio == GSM_EN) continue; // 跳过GSM_EN，已经配置
+        #endif
+        #ifdef GSM_RX_PIN
+        if (gpio == GSM_RX_PIN) continue;
+        #endif
+        #ifdef GSM_TX_PIN
+        if (gpio == GSM_TX_PIN) continue;
         #endif
         
         // 检查是否为有效的 GPIO
